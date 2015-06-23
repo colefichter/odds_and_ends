@@ -1,4 +1,4 @@
--module(menu).
+-module(toolbar).
 -behaviour(wx_object).
 
 -export([start/0, init/1, terminate/2,  code_change/3,
@@ -52,21 +52,17 @@ terminate(_Reason, _State) -> ok.
 %------------------------------------------------------------------
 make_window() ->
     Server = wx:new(),
-    Frame = wxFrame:new(Server, -1, "Menu Test", [{size, {300, 250}}]),
+    Frame = wxFrame:new(Server, -1, "Toolbar Test", [{size, {300, 250}}]),
 
-    MenuDef = [ {"&File", ["&Open", "&Hello", "&Quit"]}, 
-                {"&Edit", ["&Copy", "&Paste", separator,
-                            %This is a submenu!
-                            {"&Import", ["Import &mail", "Import &bookmarks", separator,
-                                %This is a sub-submenu!
-                                {"Import &widgets", ["&Flex widget", "&Static widget", separator, "&Imaginary widget"]}
-                            ]}
-                         ]
-                },
-                {"&Help"}
-              ],
+    % TODO: what about the ID?
+    % TODO: shorthelp? Just make it the same as the text?
+    Def = [
+        {"New", "wxART_NEW", "This is long help for 'New'"},
+        {"Press Me", "wxART_ERROR"},
+        {"Copy", "wxART_COPY", "Copy something to the clipboard"} %Long Help ends up in status bar!
+    ],
 
-    _MenuBar = build_menubar(Frame, MenuDef),
+    _Toolbar = build_toolbar(Frame, Def),   
 
     % Terminate the process loop when the window closes:
     wxFrame:connect(Frame, close_window),
@@ -78,30 +74,22 @@ make_window() ->
 % LIBRARY STUFF
 %------------------------------------------------------------------
 %------------------------------------------------------------------
-build_menubar(Frame, Def) ->
-    MenuBar = wxMenuBar:new(),
-    Menus = [menu(X) || X <- Def],
-    [wxMenuBar:append(MenuBar, Menu, Title) || {Title, Menu} <- Menus],
-    wxFrame:setMenuBar(Frame, MenuBar),
-    MenuBar.
+build_toolbar(Frame, Def) ->
+    Toolbar = wxFrame:createToolBar(Frame, [{style, ?wxNO_BORDER bor ?wxTB_HORIZONTAL}]),
+    _Buttons = [toolbar_button(Toolbar, X) || X <- Def],
+    wxToolBar:realize(Toolbar),
+    wxFrame:setToolBar(Frame,Toolbar),
+    Toolbar.
 
-menu({Title, Items}) when is_list(Items) ->
-    Menu = wxMenu:new(),
-    [menu_item(Menu, X) || X <- Items],
-    {Title, Menu};
-menu({Title}) -> {Title, wxMenu:new()}.
+toolbar_button(Toolbar, {Title, IconName}) ->
+    Icon = bitmap(IconName),    
+    Id = -1, %random:uniform(10000), % TODO: IDs
+    % TODO: shortHelp fix
+    Button = wxToolBar:addTool(Toolbar, Id, Title, Icon, [{shortHelp, Title}]),
+    {Id, Button};
+toolbar_button(Toolbar, {Title, IconName, LongHelp}) ->
+    {Id, Button} = toolbar_button(Toolbar, {Title, IconName}),
+    wxToolBar:setToolLongHelp(Toolbar, Id, LongHelp),
+    {Id, Button}.
 
-menu_item(Menu, separator) -> wxMenu:appendSeparator(Menu);
-menu_item(Menu, {Title, Items}) -> 
-    % Build a nested submenu (which itself may also contain submenus)
-    {Title, Submenu} = menu({Title, Items}),
-    Id = 1111, % TODO IDs        
-    wxMenu:append(Menu, Id, Title, Submenu);
-menu_item(Menu, Title) -> 
-    % Build a simple menu item.
-    Id = 2222, % TODO IDs. If we set an ID to ?wxID_EXIT the window can be closed from the menu.
-    %wxMenu:append(Menu, Id, Title).
-    NewMenuItem = wxMenuItem:new([{id, Id}, {text, Title}]),
-    Icon = wxArtProvider:getBitmap("wxART_QUIT"),
-    wxMenuItem:setBitmap(NewMenuItem, Icon),
-    wxMenu:append(Menu, NewMenuItem).
+bitmap(Name) -> wxArtProvider:getBitmap(Name, [{size, {16,16}}]).
