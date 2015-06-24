@@ -63,7 +63,7 @@ make_window() ->
                             ]}
                          ]
                 },
-                {"&Help"}
+                "&Help"
               ],
 
     _MenuBar = build_menubar(Frame, MenuDef),
@@ -78,30 +78,43 @@ make_window() ->
 % LIBRARY STUFF
 %------------------------------------------------------------------
 %------------------------------------------------------------------
+-type menu_def() :: [menu_item_def()].
+-type menu_item_def() :: separator
+                        | string()
+                        | {string(), [menu_item_def()]}.
+
+-spec build_menubar(any(), menu_def()) -> any().
 build_menubar(Frame, Def) ->
     MenuBar = wxMenuBar:new(),
-    Menus = [menu(X) || X <- Def],
+    Menus = [new_menu(X) || X <- Def],
     [wxMenuBar:append(MenuBar, Menu, Title) || {Title, Menu} <- Menus],
     wxFrame:setMenuBar(Frame, MenuBar),
     MenuBar.
 
-menu({Title, Items}) when is_list(Items) ->
+-spec new_menu(menu_item_def()) -> {string(), any()}.
+new_menu({Title, Items}) when is_list(Items) ->
     Menu = wxMenu:new(),
-    [menu_item(Menu, X) || X <- Items],
+    [new_menu_item(Menu, X) || X <- Items],
     {Title, Menu};
-menu({Title}) -> {Title, wxMenu:new()}.
+new_menu(Title) -> {Title, wxMenu:new()}.
 
-menu_item(Menu, separator) -> wxMenu:appendSeparator(Menu);
-menu_item(Menu, {Title, Items}) -> 
+-spec new_menu_item(any(), menu_item_def()) -> any().
+new_menu_item(Menu, separator) -> wxMenu:appendSeparator(Menu);
+new_menu_item(Menu, {Title, Items}) -> 
     % Build a nested submenu (which itself may also contain submenus)
-    {Title, Submenu} = menu({Title, Items}),
+    {Title, Submenu} = new_menu({Title, Items}),
     Id = 1111, % TODO IDs        
-    wxMenu:append(Menu, Id, Title, Submenu);
-menu_item(Menu, Title) -> 
+    wxMenu:append(Menu, Id, Title, Submenu); % TODO: wrap the wx type
+new_menu_item(Menu, Title) -> 
     % Build a simple menu item.
     Id = 2222, % TODO IDs. If we set an ID to ?wxID_EXIT the window can be closed from the menu.
     %wxMenu:append(Menu, Id, Title).
     NewMenuItem = wxMenuItem:new([{id, Id}, {text, Title}]),
-    Icon = wxArtProvider:getBitmap("wxART_QUIT"),
+    Icon = get_bitmap("wxART_QUIT"),
     wxMenuItem:setBitmap(NewMenuItem, Icon),
-    wxMenu:append(Menu, NewMenuItem).
+    wxMenu:append(Menu, NewMenuItem). % TODO: wrap the wx type
+
+
+
+-spec get_bitmap(string()) -> any(). %TODO: does wx.hrl export types?
+get_bitmap(Name) -> wxArtProvider:getBitmap(Name, [{size, {16,16}}]).

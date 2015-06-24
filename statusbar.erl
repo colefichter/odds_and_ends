@@ -1,4 +1,4 @@
--module(toolbar).
+-module(statusbar).
 -behaviour(wx_object).
 
 -export([start/0, init/1, terminate/2,  code_change/3,
@@ -52,20 +52,11 @@ terminate(_Reason, _State) -> ok.
 %------------------------------------------------------------------
 make_window() ->
     Server = wx:new(),
-    Frame = wxFrame:new(Server, -1, "Toolbar Test", [{size, {300, 250}}]),
-
-    % TODO: what about the ID?
-    % TODO: shorthelp? Just make it the same as the text?
-    Def = [
-        {"New", "wxART_NEW", "This is long help for 'New'"},
-        {"Press Me", "wxART_ERROR"},
-        {"Copy", "wxART_COPY", "Copy something to the clipboard"} %Long Help ends up in status bar!
-    ],
-
-    _Toolbar = build_toolbar(Frame, Def),   
+    Frame = wxFrame:new(Server, -1, "StatusBar Test", [{size, {300, 250}}]),
 
     wxFrame:createStatusBar(Frame),
-    wxFrame:setStatusText(Frame, "The tool bar is working!"),
+    wxFrame:setStatusText(Frame, "The status bar is working!"),
+
 
     % Terminate the process loop when the window closes:
     wxFrame:connect(Frame, close_window),
@@ -77,33 +68,3 @@ make_window() ->
 % LIBRARY STUFF
 %------------------------------------------------------------------
 %------------------------------------------------------------------
--type toolbar_def() :: [toolbar_button_def()].
--type toolbar_button_def() :: {string(), string()}
-                            | {string(), string(), string()}.
-
--type toolbar_button() :: {integer(), any()}. %TODO: does wx.hrl define types?
-
--spec build_toolbar(any(), toolbar_def()) -> any().
-build_toolbar(Frame, Def) ->
-    Toolbar = wxFrame:createToolBar(Frame, [{style, ?wxNO_BORDER bor ?wxTB_HORIZONTAL}]),
-    _Buttons = [new_toolbar_button(Toolbar, X) || X <- Def],
-    wxToolBar:realize(Toolbar),
-    wxFrame:setToolBar(Frame,Toolbar),
-    Toolbar.  % TODO: wrap the wx type
-
--spec new_toolbar_button(any(), toolbar_button_def()) -> toolbar_button().
-new_toolbar_button(Toolbar, {Title, IconName}) ->
-    Icon = get_bitmap(IconName),    
-    Id = random:uniform(10000), % TODO: IDs
-    % TODO: shortHelp fix
-    Button = wxToolBar:addTool(Toolbar, Id, Title, Icon, [{shortHelp, Title}]),
-    {Id, Button};
-new_toolbar_button(Toolbar, {Title, IconName, LongHelp}) ->
-    {Id, Button} = new_toolbar_button(Toolbar, {Title, IconName}),
-    wxToolBar:setToolLongHelp(Toolbar, Id, LongHelp),
-    {Id, Button}.
-
-
-
--spec get_bitmap(string()) -> any(). %TODO: does wx.hrl define types?
-get_bitmap(Name) -> wxArtProvider:getBitmap(Name, [{size, {16,16}}]).
