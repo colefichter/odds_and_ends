@@ -1,22 +1,22 @@
--module(toolbar).
+-module(w_server).
 -behaviour(wx_object).
 
--export([start/0, init/1, terminate/2,  code_change/3,
+-export([start/1, init/1, terminate/2,  code_change/3,
 handle_info/2, handle_cast/2, handle_call/3, handle_event/2]).
 
 -include_lib("wx/include/wx.hrl").
 
 % Client API
 %------------------------------------------------------------------
-start() -> wx_object:start_link(?MODULE, [], []).
+start(CallbackModule) -> wx_object:start_link({local, ?MODULE}, ?MODULE, [CallbackModule], []).
 
 
 % Server Implementation (behaviour callbacks)
 %------------------------------------------------------------------
-init([]) ->
+init([CallbackModule]) ->
     Frame = make_window(),
     wxFrame:show(Frame),
-    {Frame, Frame}.
+    {Frame, CallbackModule}.
 
 % Terminate the process loop when the window closes.
 handle_event(#wx{event=#wxClose{}}, State) -> {stop, normal, State};
@@ -44,10 +44,18 @@ handle_event(Msg, State) ->
 
 handle_info(_Msg, State) -> {noreply, State}.
 handle_cast(_Msg, State) -> {noreply, State}.
+
+handle_call(build_frame, _From, CallbackModule) ->
+    io:format("BUILDING FRAME (server)~n"),
+    CallbackModule:build_frame("build_frame invoked!"),
+    {reply, nothing, CallbackModule};
 handle_call(_Msg, _From, State) -> {reply, ok, State}.
+
 code_change(_, _, State) -> {stop, ignore, State}.
 terminate(_Reason, _State) -> ok.
 
+% Internal Stuff
+%------------------------------------------------------------------
 % Internal Stuff
 %------------------------------------------------------------------
 make_window() ->
