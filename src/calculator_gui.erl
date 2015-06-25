@@ -31,43 +31,43 @@ handle_event(#wx{id=ButtonId, event=#wxCommand{type = command_button_clicked}}, 
     handle_button_click(ButtonText, State),
     {noreply, State}.
 
-handle_info(Msg, State) -> {noreply, State}.
-handle_cast(Msg, State) -> {noreply, State}.
-handle_call(Msg, From, State) -> {reply, ok, State}.
+handle_info(_Msg, State) -> {noreply, State}.
+handle_cast(_Msg, State) -> {noreply, State}.
+handle_call(_Msg, _From, State) -> {reply, ok, State}.
 code_change(_, _, State) -> {stop, ignore, State}.
 terminate(_Reason, _State) -> ok.
 
 % Internal Stuff
 %------------------------------------------------------------------
-handle_button_click("Clear", State) ->
+handle_button_click("Clear", _State) ->
     clear_display();
-handle_button_click("Del", State) ->
+handle_button_click("Del", _State) ->
     Display = get("wx_textctrl_90001"),
     Text = wxTextCtrl:getValue(Display),
     case length(Text) of
         0 -> nothing;
         Len -> wxTextCtrl:setValue(Display, string:left(Text, Len - 1))
     end;
-handle_button_click("-", State) ->
+handle_button_click("-", _State) ->
     Display = get("wx_textctrl_90001"),
     Text = wxTextCtrl:getValue(Display),
     X = calculator:list_to_numeric(Text),
     calculator:subtract(X),
     clear_display();
-handle_button_click("+", State) -> 
+handle_button_click("+", _State) -> 
     Display = get("wx_textctrl_90001"),
     Text = wxTextCtrl:getValue(Display),
     X = calculator:list_to_numeric(Text),
     calculator:add(X),
     clear_display();
-handle_button_click("=", State) ->
+handle_button_click("=", _State) ->
     Display = get("wx_textctrl_90001"),
     Text = wxTextCtrl:getValue(Display),
     X = calculator:list_to_numeric(Text),
     Result = calculator:enter(X),
     io:format("RESULT ~p~n", [Result]),
     wxTextCtrl:setValue(Display, calculator:numeric_to_list(Result));
-handle_button_click(Character, State) -> % "0" to "9" and "."
+handle_button_click(Character, _State) -> % "0" to "9" and "."
     Display = get("wx_textctrl_90001"),
     wxTextCtrl:appendText(Display, Character).
 

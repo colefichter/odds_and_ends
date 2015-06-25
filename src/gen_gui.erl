@@ -4,7 +4,7 @@
 
 behaviour_info(callbacks) -> 
     [
-        {start, 0},
-        {build_frame, 1}
+        {command_invoked, 1}, %Menu & Toolbar clicks
+        {button_clicked, 1}
         % TODO: replace build_frame with proxied CBs for menu, button, toolbar, etc.
     ].
