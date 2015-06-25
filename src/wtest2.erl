@@ -7,10 +7,14 @@ start() -> spawn(?MODULE, init, []).
 
 init() -> 
     io:format("wtest:start ~p~n", [self()]),
-    %_S = w:start_gui(?MODULE).
-    w:start(),
-    w:new_frame("TESTING!"),
-    w:click(), % Simulate a fake click in the UI...
+    w_server:start(),
+    Frame = w:new_frame("TESTING!"),
+
+    io:format("init frame ~p~n", [Frame]),
+
+    Panel = w:new_panel(Frame),
+    w:show(Frame),
+    %wx_object:call(w_server, fake_click), % Simulate a fake click in the UI...
     loop().
 
 loop() ->

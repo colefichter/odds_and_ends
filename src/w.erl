@@ -6,13 +6,15 @@
 
 % API for building wx GUIs.
 %------------------------------------------------------------------
-start() -> w_server:start().
 
 %TODO: add size and options.
-new_frame(Title) -> wx_object:call(?SERVER, {window, Title}).
+new_frame(Title) -> new_frame(Title, []).
+new_frame(Title, Options) -> wx_object:call(?SERVER, {new_frame, Title, Options}).
 
+new_panel({frame, FrameId}) -> new_panel({frame, FrameId}, []).
+new_panel({frame, FrameId}, Options) -> wx_object:call(?SERVER, {new_panel, FrameId, Options}).
 
-click() -> wx_object:call(?SERVER, fake_click).
+show({frame, FrameId}) -> wx_object:call(?SERVER, {show, {frame, FrameId}}).
 
 % Internal Helpers
 %------------------------------------------------------------------
