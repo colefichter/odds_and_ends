@@ -7,6 +7,9 @@
 % wx_object callbacks
 -export([init/1, terminate/2,  code_change/3, handle_info/2, handle_cast/2, handle_call/3, handle_event/2]).
 
+% Exports for convenience
+-export([add_panel/2]).
+
 -include_lib("wx/include/wx.hrl").
 
 % Client API
@@ -49,17 +52,23 @@ handle_call({new_frame, Title, Options}, From, State) ->
     F = {Id, _WxFrame} = new_window(Title, Options), %TODO: options
     store_frame(From, F),
     {reply, {frame, Id}, State};
+handle_call({add_statusbar, FrameId}, From, State) ->
+    load_frame_and_run(FrameId, From, wxFrame, createStatusBar),
+    {reply, ok, State};
+handle_call({set_status, FrameId, Text}, From, State) ->
+    load_frame_and_run(FrameId, From, wxFrame, setStatusText, [Text]),
+    {reply, ok, State};
 
 handle_call({new_panel, FrameId, Options}, From, State) ->
     io:format("FRAMEID ~p~n", [FrameId]),
-    {FrameId, WxFrame} = get_frame(From, FrameId), %TODO: not found?
-    P = {Id, _wxPanel} = add_panel(WxFrame, Options),
+    % {FrameId, WxFrame} = get_frame(From, FrameId), %TODO: not found?
+    % P = {Id, _wxPanel} = add_panel(WxFrame, Options),
+    P = {Id, _wxPanel} = load_frame_and_run(FrameId, From, ?MODULE, add_panel, [Options]),
     store_panel(From, P),
     {reply, {panel, Id}, State};
 
 handle_call({show, {frame, FrameId}}, From, State) ->
-    {FrameId, WxFrame} = get_frame(From, FrameId), %TODO: not found?
-    wxWindow:show(WxFrame),
+    load_frame_and_run(FrameId, From, wxWindow, show),
     {reply, ok, State};
 
 handle_call(Msg, _From, State) -> {reply, {unknown_message, Msg}, State}.
@@ -84,6 +93,11 @@ new_window(Title, Options) ->
 
 add_panel(WxFrame, []) -> {next_id(), wxPanel:new(WxFrame)};
 add_panel(WxFrame, Options) -> {next_id(), wxPanel:new(WxFrame, Options)}.
+
+load_frame_and_run(FrameId, From, Mod, Fun) -> load_frame_and_run(FrameId, From, Mod, Fun, []).
+load_frame_and_run(FrameId, From, Mod, Fun, ExtraArgs) ->
+    {FrameId, WxFrame} = get_frame(From, FrameId), %TODO: not found?
+    erlang:apply(Mod, Fun, [WxFrame|ExtraArgs]).
 
 % Wrapper around the repo:
 %------------------------------------------------------------------
