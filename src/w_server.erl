@@ -8,7 +8,7 @@
 -export([init/1, terminate/2,  code_change/3, handle_info/2, handle_cast/2, handle_call/3, handle_event/2]).
 
 % Exports for convenience
--export([add_panel/2]).
+-export([add_panel/2, build_toolbar/5]).
 
 -include_lib("wx/include/wx.hrl").
 
@@ -48,24 +48,27 @@ handle_event(Msg, State) ->
 
 
 handle_call({new_frame, Title, Options}, From, State) ->
-    io:format("w_server:handle_call({window, Title}) ~p~n", [self()]),
-    F = {Id, _WxFrame} = new_window(Title, Options), %TODO: options
-    store_frame(From, F),
+    {Id, WxFrame} = new_window(Title, Options), %TODO: options
+    set_control(From, Id, WxFrame),
     {reply, {frame, Id}, State};
+
 handle_call({add_statusbar, FrameId}, From, State) ->
     load_frame_and_run(FrameId, From, wxFrame, createStatusBar),
     {reply, ok, State};
+
 handle_call({set_status, FrameId, Text}, From, State) ->
     load_frame_and_run(FrameId, From, wxFrame, setStatusText, [Text]),
     {reply, ok, State};
 
-handle_call({new_panel, FrameId, Options}, From, State) ->
-    io:format("FRAMEID ~p~n", [FrameId]),
-    % {FrameId, WxFrame} = get_frame(From, FrameId), %TODO: not found?
-    % P = {Id, _wxPanel} = add_panel(WxFrame, Options),
-    P = {Id, _wxPanel} = load_frame_and_run(FrameId, From, ?MODULE, add_panel, [Options]),
-    store_panel(From, P),
+handle_call({add_panel, FrameId, Options}, From, State) ->
+    {Id, WxPanel} = load_frame_and_run(FrameId, From, ?MODULE, add_panel, [Options]),
+    set_control(From, Id, WxPanel),
     {reply, {panel, Id}, State};
+
+handle_call({add_toolbar, FrameId, Def, W, H}, From, State) ->
+    Buttons = load_frame_and_run(FrameId, From, ?MODULE, build_toolbar, [From, Def, W, H]),
+    Buttons2 = [{button, Id, Title} || {Id, _WxButton, Title} <- Buttons],
+    {reply, Buttons2, State};
 
 handle_call({show, {frame, FrameId}}, From, State) ->
     load_frame_and_run(FrameId, From, wxWindow, show),
@@ -96,8 +99,30 @@ add_panel(WxFrame, Options) -> {next_id(), wxPanel:new(WxFrame, Options)}.
 
 load_frame_and_run(FrameId, From, Mod, Fun) -> load_frame_and_run(FrameId, From, Mod, Fun, []).
 load_frame_and_run(FrameId, From, Mod, Fun, ExtraArgs) ->
-    {FrameId, WxFrame} = get_frame(From, FrameId), %TODO: not found?
+    WxFrame = get_control(From, FrameId), % TODO: what to do if control is not found?
     erlang:apply(Mod, Fun, [WxFrame|ExtraArgs]).
+
+build_toolbar(WxFrame, From, Def, W, H) ->
+    % TODO: pass in styles
+    WxToolbar = wxFrame:createToolBar(WxFrame, [{style, ?wxNO_BORDER bor ?wxTB_HORIZONTAL}]),
+    Buttons = [new_toolbar_button(WxToolbar, From, X, W, H) || X <- Def],
+    wxToolBar:realize(WxToolbar),
+    wxFrame:setToolBar(WxFrame,WxToolbar),
+    Buttons.
+
+new_toolbar_button(Toolbar, From, {Title, IconName}, W, H) ->
+    Icon = get_bitmap(IconName, W, H),    
+    Id = next_id(),    
+    WxButton = wxToolBar:addTool(Toolbar, Id, Title, Icon, [{shortHelp, Title}]),
+    set_control(From, Id, WxButton),
+    {Id, WxButton, Title};
+new_toolbar_button(Toolbar, From, {Title, IconName, LongHelp}, W, H) ->
+    {Id, WxButton, Title} = new_toolbar_button(Toolbar, From, {Title, IconName}, W, H),
+    wxToolBar:setToolLongHelp(Toolbar, Id, LongHelp),
+    {Id, WxButton, Title}.
+
+get_bitmap(Name, W, H) -> wxArtProvider:getBitmap(Name, [{size, {W, H}}]).  % TODO: allow different sizes!
+
 
 % Wrapper around the repo:
 %------------------------------------------------------------------
@@ -109,12 +134,7 @@ next_id() -> (repo()):next_id().
 get_wx_server() -> (repo()):get_wx_server().
 set_wx_server(Server) -> (repo()):set_wx_server(Server).
 
-% get_env({ClientPid, _}) -> (repo()):get_env(ClientPid).
-% set_env({ClientPid, _}, Env) -> (repo()):set_env(ClientPid, Env).
-
-
-get_frame({ClientPid, _}, FrameId) -> (repo()):get_frame(ClientPid, FrameId).
-store_frame({ClientPid, _}, Frame) -> (repo()):store_frame(ClientPid, Frame).
-
-get_panel({ClientPid, _}, PanelId) -> (repo()):get_panel(ClientPid, PanelId).
-store_panel({ClientPid, _}, Panel) -> (repo()):store_panel(ClientPid, Panel).
+get_control({ClientPid, _}, ControlId) -> 
+    {ok, WxControl} =(repo()):get_control(ClientPid, ControlId),
+    WxControl.
+set_control({ClientPid, _}, ControlId, Control) -> (repo()):set_control(ClientPid, ControlId, Control).

@@ -9,7 +9,14 @@ init() ->
     w_server:start(), %Do this in a supervision tree instead!
     Frame = w:new_frame("TESTING!", [{size, {200, 200}}]),
     w:add_statusbar(Frame, "Statusbar text set quickly!"),
-    Panel = w:new_panel(Frame),
+    _Panel = w:add_panel(Frame),
+
+    ToolbarButtonDef = [
+        {"New", "wxART_NEW", "This is long help for 'New'"},
+        {"Press Me", "wxART_ERROR"},
+        {"Copy", "wxART_COPY", "Copy something to the clipboard"} %Long Help ends up in status bar!
+    ],
+    _Buttons = w:add_toolbar(Frame, ToolbarButtonDef),
     w:show(Frame),
     loop().
 
