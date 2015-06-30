@@ -62,6 +62,3 @@ add_toolbar({frame, FrameId}, Definition, W, H) -> wx_object:call(?SERVER, {add_
 
 -spec show(frame_handle()) -> ok.
 show({frame, FrameId}) -> wx_object:call(?SERVER, {show, {frame, FrameId}}).
-
-% Internal Helpers
-%------------------------------------------------------------------
