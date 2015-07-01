@@ -2,7 +2,7 @@
 
 % A simple repository that stores data in the process dictionary.
 
--export([set_wx_server/1, get_wx_server/0, create_identity/0, next_id/0, get_control/2, set_control/3]).
+-export([set_wx_server/1, get_wx_server/0, create_identity/0, next_id/0, get_control/1, set_control/3]).
 
 -define(WXSERVER, wx_server).
 -define(IDENTITY, identity).
