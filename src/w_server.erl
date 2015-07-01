@@ -38,8 +38,14 @@ handle_event(Msg = #wx{id=?wxID_EXIT}, State) ->
     wxWindow:destroy(State),
     {noreply, State};
 
-handle_event(Msg = #wx{event=#wxCommand{ type=command_menu_selected }}, State) -> 
+handle_event(Msg = #wx{id=ControlId, event=#wxCommand{ type=command_menu_selected }}, State) -> 
     io:format("wxCommand menu click. ~p ~p~n", [self(), Msg]),
+    ClientPid = get_owner_pid(ControlId),
+    {_WxControl, Text} = get_control(ControlId),
+    io:format("   sending callback to client ~p~n", [ClientPid]),
+    ClientPid ! {click, {button, ControlId, Text}},
+
+
     {noreply, State};
 
 handle_event(Msg, State) -> 
@@ -52,26 +58,26 @@ handle_call({new_frame, Title, Options}, From, State) ->
     set_control(From, Id, WxFrame),
     {reply, {frame, Id}, State};
 
-handle_call({add_statusbar, FrameId}, From, State) ->
-    load_frame_and_run(FrameId, From, wxFrame, createStatusBar),
+handle_call({add_statusbar, FrameId}, _From, State) ->
+    load_frame_and_run(FrameId, wxFrame, createStatusBar),
     {reply, ok, State};
 
-handle_call({set_status, FrameId, Text}, From, State) ->
-    load_frame_and_run(FrameId, From, wxFrame, setStatusText, [Text]),
+handle_call({set_status, FrameId, Text}, _From, State) ->
+    load_frame_and_run(FrameId, wxFrame, setStatusText, [Text]),
     {reply, ok, State};
 
 handle_call({add_panel, FrameId, Options}, From, State) ->
-    {Id, WxPanel} = load_frame_and_run(FrameId, From, ?MODULE, add_panel, [Options]),
+    {Id, WxPanel} = load_frame_and_run(FrameId, ?MODULE, add_panel, [Options]),
     set_control(From, Id, WxPanel),
     {reply, {panel, Id}, State};
 
 handle_call({add_toolbar, FrameId, Def, W, H}, From, State) ->
-    Buttons = load_frame_and_run(FrameId, From, ?MODULE, build_toolbar, [From, Def, W, H]),
+    Buttons = load_frame_and_run(FrameId, ?MODULE, build_toolbar, [From, Def, W, H]),
     Buttons2 = [{button, Id, Title} || {Id, _WxButton, Title} <- Buttons],
     {reply, Buttons2, State};
 
-handle_call({show, {frame, FrameId}}, From, State) ->
-    load_frame_and_run(FrameId, From, wxWindow, show),
+handle_call({show, {frame, FrameId}}, _From, State) ->
+    load_frame_and_run(FrameId, wxWindow, show),
     {reply, ok, State};
 
 handle_call(Msg, _From, State) -> {reply, {unknown_message, Msg}, State}.
@@ -97,9 +103,10 @@ new_window(Title, Options) ->
 add_panel(WxFrame, []) -> {next_id(), wxPanel:new(WxFrame)};
 add_panel(WxFrame, Options) -> {next_id(), wxPanel:new(WxFrame, Options)}.
 
-load_frame_and_run(FrameId, From, Mod, Fun) -> load_frame_and_run(FrameId, From, Mod, Fun, []).
-load_frame_and_run(FrameId, From, Mod, Fun, ExtraArgs) ->
-    WxFrame = get_control(From, FrameId), % TODO: what to do if control is not found?
+load_frame_and_run(FrameId, Mod, Fun) -> load_frame_and_run(FrameId, Mod, Fun, []).
+load_frame_and_run(FrameId, Mod, Fun, ExtraArgs) ->
+    %WxFrame = get_control(From, FrameId), % TODO: what to do if control is not found?
+    WxFrame = get_control(FrameId),
     erlang:apply(Mod, Fun, [WxFrame|ExtraArgs]).
 
 build_toolbar(WxFrame, From, Def, W, H) ->
@@ -114,7 +121,7 @@ new_toolbar_button(Toolbar, From, {Title, IconName}, W, H) ->
     Icon = get_bitmap(IconName, W, H),    
     Id = next_id(),    
     WxButton = wxToolBar:addTool(Toolbar, Id, Title, Icon, [{shortHelp, Title}]),
-    set_control(From, Id, WxButton),
+    set_control(From, Id, {WxButton, Title}),
     {Id, WxButton, Title};
 new_toolbar_button(Toolbar, From, {Title, IconName, LongHelp}, W, H) ->
     {Id, WxButton, Title} = new_toolbar_button(Toolbar, From, {Title, IconName}, W, H),
@@ -134,7 +141,36 @@ next_id() -> (repo()):next_id().
 get_wx_server() -> (repo()):get_wx_server().
 set_wx_server(Server) -> (repo()):set_wx_server(Server).
 
-get_control({ClientPid, _}, ControlId) -> 
-    {ok, WxControl} =(repo()):get_control(ClientPid, ControlId),
+get_owner_pid(ControlId) ->
+    {ok, {ControlId, OwnerPid, _WxControl}} = (repo()):get_control(ControlId),
+    OwnerPid.
+get_control(ControlId) ->
+    {ok, {ControlId, _OwnerPid, WxControl}} = (repo()):get_control(ControlId),
     WxControl.
-set_control({ClientPid, _}, ControlId, Control) -> (repo()):set_control(ClientPid, ControlId, Control).
+set_control({ClientPid, _}, ControlId, Control) ->
+    (repo()):set_control(ControlId, ClientPid, Control).
+
+%------------------------------------------------------------------
+% Unit tests: Move these into a separate module
+%------------------------------------------------------------------
+
+-include_lib("eunit/include/eunit.hrl").
+
+simple_window_test() ->
+    w_server:start(), %Do this in a supervision tree instead!
+    Frame = {frame, _FrameId} = w:new_frame("TESTING!", [{size, {200, 200}}]),
+    ok = w:add_statusbar(Frame, "Statusbar text set quickly!"),
+    {panel, _PanelId} = w:add_panel(Frame),
+
+    ToolbarButtonDef = [
+        {"New", "wxART_NEW", "This is long help for 'New'"},
+        {"Press Me", "wxART_ERROR"},
+        {"Copy", "wxART_COPY", "Copy something to the clipboard"} %Long Help ends up in status bar!
+    ],
+    [
+        {button, _B1Id, "New"},
+        {button, _B2Id, "Press Me"},
+        {button, _B3Id, "Copy"}
+    ] = w:add_toolbar(Frame, ToolbarButtonDef),
+    ok = w:show(Frame),
+    ok = w_server:stop().

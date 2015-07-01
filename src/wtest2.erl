@@ -23,6 +23,9 @@ init() ->
 loop() ->
     receive
         stop -> ok;
+        {click, {button, ButtonId, ButtonText}} ->
+            io:format("Handling button click: Id ~p Text ~p~n", [ButtonId, ButtonText]),
+            loop();
         Message ->
             io:format("CALLBACK INVOKED ~p: ~p~n", [self(), Message]),
             loop()
