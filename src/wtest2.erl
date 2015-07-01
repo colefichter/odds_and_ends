@@ -1,7 +1,6 @@
 -module(wtest2).
 
-%-export([start/0, build_frame/1]).
--compile([export_all]).
+-export([start/0, init/0]).
 
 start() -> spawn(?MODULE, init, []).
 
@@ -30,8 +29,3 @@ loop() ->
             io:format("CALLBACK INVOKED ~p: ~p~n", [self(), Message]),
             loop()
     end.
-
-% gen_gui callbacks
-%------------------------------------------------------------------
-% command_invoked(WhatArg) -> io:format("command_invoked, ~p~n", [WhatArg]).
-% button_clicked(WhatArg) -> io:format("button_clicked, ~p~n", [WhatArg]).

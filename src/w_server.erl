@@ -22,7 +22,6 @@ stop() -> wx_object:cast(?MODULE, stop).
 % Server Implementation (wx_object behaviour callbacks)
 %------------------------------------------------------------------
 init([RepoModule]) ->
-    io:format("w_server:init ~p~n", [self()]),
     put(repo, RepoModule),
     create_identity(),
     WxServer = wx:new(),
@@ -32,25 +31,23 @@ init([RepoModule]) ->
 
 % Terminate the process loop when the window closes.
 handle_event(#wx{event=#wxClose{}}, State) -> {stop, normal, State};
-
-handle_event(Msg = #wx{id=?wxID_EXIT}, State) -> 
-    io:format("Close. ~p~n", [Msg]),
+handle_event(_Msg = #wx{id=?wxID_EXIT}, State) -> 
     wxWindow:destroy(State),
     {noreply, State};
 
 handle_event(Msg = #wx{id=ControlId, event=#wxCommand{ type=command_menu_selected }}, State) -> 
-    io:format("wxCommand menu click. ~p ~p~n", [self(), Msg]),
+    %io:format("wxCommand menu click. ~p ~p~n", [self(), Msg]),
     ClientPid = get_owner_pid(ControlId),
     {_WxControl, Text} = get_control(ControlId),
     io:format("   sending callback to client ~p~n", [ClientPid]),
     ClientPid ! {click, {button, ControlId, Text}},
-
-
     {noreply, State};
 
 handle_event(Msg, State) -> 
     io:format("Generic handler click. ~p~n", [Msg]),
     {noreply, State}.
+handle_event(_Msg = #wx{event=#wxCommand{ type=command_menu_selected }}, State) -> {noreply, State};
+handle_event(_Msg, State) -> {noreply, State}.
 
 
 handle_call({new_frame, Title, Options}, From, State) ->
@@ -128,7 +125,7 @@ new_toolbar_button(Toolbar, From, {Title, IconName, LongHelp}, W, H) ->
     wxToolBar:setToolLongHelp(Toolbar, Id, LongHelp),
     {Id, WxButton, Title}.
 
-get_bitmap(Name, W, H) -> wxArtProvider:getBitmap(Name, [{size, {W, H}}]).  % TODO: allow different sizes!
+get_bitmap(Name, W, H) -> wxArtProvider:getBitmap(Name, [{size, {W, H}}]).
 
 
 % Wrapper around the repo:
@@ -141,11 +138,16 @@ next_id() -> (repo()):next_id().
 get_wx_server() -> (repo()):get_wx_server().
 set_wx_server(Server) -> (repo()):set_wx_server(Server).
 
+<<<<<<< HEAD
 get_owner_pid(ControlId) ->
     {ok, {ControlId, OwnerPid, _WxControl}} = (repo()):get_control(ControlId),
     OwnerPid.
 get_control(ControlId) ->
     {ok, {ControlId, _OwnerPid, WxControl}} = (repo()):get_control(ControlId),
+=======
+get_control({ClientPid, _}, ControlId) -> 
+    {ok, WxControl} = (repo()):get_control(ClientPid, ControlId),
+>>>>>>> master
     WxControl.
 set_control({ClientPid, _}, ControlId, Control) ->
     (repo()):set_control(ControlId, ClientPid, Control).
