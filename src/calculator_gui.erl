@@ -72,7 +72,7 @@ handle_button_click(Character, _State) -> % "0" to "9" and "."
     wxTextCtrl:appendText(Display, Character).
 
 clear_display() ->
-    Display = get("wx_tedxtctrl_90001"),
+    Display = get("wx_textctrl_90001"),
     wxTextCtrl:clear(Display).
 
 make_window() ->

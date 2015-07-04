@@ -9,7 +9,6 @@ init() ->
     Frame = w:new_frame("TESTING!", [{size, {200, 200}}]),
     w:add_statusbar(Frame, "Statusbar text set quickly!"),
     _Panel = w:add_panel(Frame),
-
     ToolbarButtonDef = [
         {"New", "wxART_NEW", "This is long help for 'New'"},
         {"Press Me", "wxART_ERROR"},

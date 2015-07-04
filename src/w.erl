@@ -16,6 +16,8 @@
 -type sizer_handle() :: {box_sizer, integer()}.
 -type grid_sizer_handle() :: {grid_sizer, integer()}.
 -type textbox_handle() :: {textbox, integer()}.
+-type control_handle() :: blank
+                        | {button, integer(), string()}.
 
 % Reusable types for common options:
 -type opt_pos() :: {pos, {integer(), integer()}}.
@@ -43,6 +45,10 @@
 -type toolbar_button_def() :: {string(), string()}
                             | {string(), string(), string()}.
 
+-type control_list_def() :: [control_def()].
+-type control_def() :: blank
+                     | {button, integer(), string()}.
+
 % Frame
 %------------------------------------------------------------------
 -spec new_frame(string()) -> frame_handle().
@@ -59,6 +65,11 @@ show({frame, FrameId}) -> wx_object:call(?SERVER, {show, {frame, FrameId}}).
 -spec add_panel(panel_handle(), panel_options()) -> panel_handle(). 
 add_panel({frame, FrameId}) -> add_panel({frame, FrameId}, []).
 add_panel({frame, FrameId}, Options) -> wx_object:call(?SERVER, {add_panel, FrameId, Options}).
+
+
+set_sizer({panel, PanelId}, {box_sizer, SizerId}) -> 
+    wx_object:call(?SERVER, {set_sizer, PanelId, SizerId}).
+
 
 % Statusbar
 %------------------------------------------------------------------
@@ -90,12 +101,31 @@ new_column_sizer() -> wx_object:call(?SERVER, {new_box_sizer, ?wxVERTICAL}).
 -spec new_row_sizer() -> sizer_handle().
 new_row_sizer() -> wx_object:call(?SERVER, {new_box_sizer, ?wxHORIZONTAL}).
 
+set_min_size({box_sizer, SizerId}, Width, Height) -> 
+    wx_object:call(?SERVER, {set_min_size, SizerId, Width, Height}).
+
+append_child({box_sizer, ParentId}, {grid_sizer, ChildId}) -> append_child(ParentId, ChildId);
+append_child({box_sizer, ParentId}, {textbox, ChildId}) -> append_child(ParentId, ChildId);
+append_child(ParentId, ChildId) -> wx_object:call(?SERVER, {append_child, ParentId, ChildId}).
+
+append_spacer({box_sizer, SizerId}, Amount) -> wx_object:call(?SERVER, {append_spacer, SizerId, Amount}).
+
 % Gridsizer
 %------------------------------------------------------------------
 %TODO: add an overload that uses a default padding value?
 -spec new_grid_sizer(integer(), integer(), integer(), integer()) -> grid_sizer_handle().
 new_grid_sizer(Rows, Columns, VerticlePadding, HorizontalPadding) ->
     wx_object:call(?SERVER, {new_grid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding}).
+
+-spec fill_grid_sizer(grid_sizer_handle(), control_list_def()) -> ok.
+fill_grid_sizer({grid_sizer, GsId}, Controls) -> wx_object:call(?SERVER, {fill_grid_sizer, GsId, Controls}).
+
+
+% Buttons
+%------------------------------------------------------------------
+-spec new_buttons(panel_handle(), control_list_def()) -> [control_handle()].
+new_buttons({panel, PanelId}, Def) -> wx_object:call(?SERVER, {new_buttons, PanelId, Def}).
+
 
 % Textbox constructors
 %------------------------------------------------------------------

@@ -38,15 +38,23 @@ handle_event(_Msg = #wx{id=?wxID_EXIT}, State) ->
     % TODO: this is wrong. Cleanup state (which is not in State).
     wxWindow:destroy(State),
     {noreply, State};
-handle_event(_Msg = #wx{id=ControlId, event=#wxCommand{ type=command_menu_selected }}, State) -> 
-    %io:format("wxCommand menu click. ~p ~p~n", [self(), Msg]),
+% Handle menu & toolbar click events:
+handle_event(Msg = #wx{id=ControlId, event=#wxCommand{ type=command_menu_selected }}, State) -> 
+    io:format("wxCommand menu click. ~p ~p~n", [self(), Msg]),
     ClientPid = get_owner_pid(ControlId),
     {_WxControl, Text} = get_control(ControlId),
     io:format("   sending callback to client ~p~n", [ClientPid]),
     ClientPid ! {click, {button, ControlId, Text}},
     {noreply, State};
+% Handle regular button click events:
+handle_event(Msg = #wx{id=ButtonId, event=#wxCommand{type = command_button_clicked}}, State) ->
+    io:format("wxCommand button click. ~p ~p~n", [self(), Msg]),
+    ClientPid = get_owner_pid(ButtonId),
+    {_WxButton, Text} = get_control(ButtonId),
+    io:format("   sending callback to client ~p~n", [ClientPid]),
+    ClientPid ! {click, {button, ButtonId, Text}},  %TODO: differentiate between toolbar & regular buttons?
+    {noreply, State};
 handle_event(_Msg, State) -> {noreply, State}.
-
 
 
 % Frame
@@ -65,6 +73,12 @@ handle_call({add_panel, FrameId, Options}, From, State) ->
     {Id, WxPanel} = load_control_and_run(FrameId, ?MODULE, add_panel, [Options]),
     set_control(From, Id, WxPanel),
     {reply, {panel, Id}, State};
+
+handle_call({set_sizer, PanelId, SizerId}, _From, State) ->
+    WxPanel = get_control(PanelId),
+    WxSizer = get_control(SizerId),
+    wxPanel:setSizer(WxPanel, WxSizer),
+    {reply, ok, State};
 
 % Statusbar
 %------------------------------------------------------------------
@@ -90,6 +104,20 @@ handle_call({new_box_sizer, Orientation}, From, State) ->
     set_control(From, Id, Sizer),
     {reply, {box_sizer, Id}, State};
 
+handle_call({set_min_size, SizerId, Width, Height}, _From, State) ->
+    load_control_and_run(SizerId, wxSizer, setMinSize, [Width, Height]),
+    {reply, ok, State};
+
+handle_call({append_child, ParentId, ChildId}, _From, State) ->
+    WxParent = get_control(ParentId),
+    WxChild = get_control(ChildId),
+    wxSizer:add(WxParent, WxChild),
+    {reply, ok, State};
+
+handle_call({append_spacer, SizerId, Amount}, _From, State) ->
+    load_control_and_run(SizerId, wxSizer, addSpacer, [Amount]),
+    {reply, ok, State};
+
 % Gridsizer
 %------------------------------------------------------------------
 handle_call({new_grid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding}, From, State) ->
@@ -97,6 +125,18 @@ handle_call({new_grid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding},
     Id = next_id(),
     set_control(From, Id, Sizer),
     {reply, {grid_sizer, Id}, State};
+
+handle_call({fill_grid_sizer, GsId, Controls}, _From, State) ->
+    Sizer = get_control(GsId),
+    fill_grid_sizer(Sizer, Controls),
+    {reply, ok, State};
+
+% Buttons
+%------------------------------------------------------------------
+handle_call({new_buttons, PanelId, Def}, From, State) ->
+    Panel = get_control(PanelId),
+    Buttons = new_buttons(Panel, From, Def),
+    {reply, Buttons, State};
 
 % Textbox constructors
 %------------------------------------------------------------------
@@ -141,7 +181,8 @@ new_window(Title, Options) ->
     WxFrame = wxFrame:new(get_wx_server(), Id, Title, Options),
     % Terminate the process loop when the window closes:
     wxFrame:connect(WxFrame, close_window),
-    wxFrame:connect(WxFrame, command_menu_selected),
+    wxFrame:connect(WxFrame, command_menu_selected), %Toolbar & menu commands
+    wxFrame:connect(WxFrame, command_button_clicked), %Regular button commands
     {Id, WxFrame}.
 
 add_panel(WxFrame, []) -> {next_id(), wxPanel:new(WxFrame)};
@@ -175,6 +216,29 @@ new_toolbar_button(Toolbar, From, {Title, IconName, LongHelp}, W, H) ->
     {Id, WxButton, Title}.
 
 get_bitmap(Name, W, H) -> wxArtProvider:getBitmap(Name, [{size, {W, H}}]).
+
+fill_grid_sizer(Sizer, Def) ->
+    Controls = [add_to_grid_sizer(Sizer, X) || X <- Def],
+    Controls.
+
+add_to_grid_sizer(Sizer, blank) ->
+    wxSizer:addSpacer(Sizer, 0),
+    blank;
+add_to_grid_sizer(Sizer, {button, Id, _Text}) ->
+    {WxButton, _Text} = get_control(Id),
+    wxSizer:add(Sizer, WxButton, [{proportion, 0}, {flag, ?wxEXPAND}]). % TODO: options!
+
+new_buttons(WxPanel, From, Def) ->
+    Buttons = [new_button(WxPanel, From, X) || X <- Def],
+    Buttons.
+
+new_button(_WxPanel, _From, blank) -> blank;
+new_button(WxPanel, From, {button, Text}) ->
+    Id = next_id(),
+    WxButton = wxButton:new(WxPanel, Id, [{label, Text}]),
+    set_control(From, Id, {WxButton, Text}),
+    {button, Id, Text}.
+
 
 
 % Wrapper around the repo:
@@ -241,3 +305,20 @@ textbox_test() ->
     ?assertEqual("Hi", w:get_text(Textbox1)),
     ?assertEqual("Hello", w:get_text(Textbox2)),
     ok = w_server:stop().
+
+buttons_test() ->
+    w_server:start(), %Do this in a supervision tree instead!
+    Frame = w:new_frame("Textbox tests!"),
+    Panel = w:add_panel(Frame),
+    ButtonDef = [
+        {button, "First"},
+        {button, "Second"},
+        blank,
+        {button, "Third"}
+    ],
+    Buttons = w:new_buttons(Panel, ButtonDef),
+    ?assertEqual(4, length(Buttons)),
+    {button, _Id1, "First"} = lists:nth(1, Buttons),
+    {button, _Id2, "Second"} = lists:nth(2, Buttons),
+    ?assertEqual(blank, lists:nth(3, Buttons)),
+    {button, _Id3, "Third"} = lists:nth(4, Buttons).
