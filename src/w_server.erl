@@ -30,8 +30,12 @@ init([RepoModule]) ->
     {UselessWindow, []}.
 
 % Terminate the process loop when the window closes.
-handle_event(#wx{event=#wxClose{}}, State) -> {stop, normal, State};
+handle_event(#wx{event=#wxClose{}}, State) -> 
+    % TODO: TEST! This is probably wrong, since this server manages a bunch of controls.
+    % Cleanup the state related to the closing window.
+    {stop, normal, State};
 handle_event(_Msg = #wx{id=?wxID_EXIT}, State) -> 
+    % TODO: this is wrong. Cleanup state (which is not in State).
     wxWindow:destroy(State),
     {noreply, State};
 handle_event(_Msg = #wx{id=ControlId, event=#wxCommand{ type=command_menu_selected }}, State) -> 
@@ -44,35 +48,82 @@ handle_event(_Msg = #wx{id=ControlId, event=#wxCommand{ type=command_menu_select
 handle_event(_Msg, State) -> {noreply, State}.
 
 
+
+% Frame
+%------------------------------------------------------------------
 handle_call({new_frame, Title, Options}, From, State) ->
     {Id, WxFrame} = new_window(Title, Options), %TODO: options
     set_control(From, Id, WxFrame),
     {reply, {frame, Id}, State};
-
-handle_call({add_statusbar, FrameId}, _From, State) ->
-    load_frame_and_run(FrameId, wxFrame, createStatusBar),
+handle_call({show, {frame, FrameId}}, _From, State) ->
+    load_control_and_run(FrameId, wxWindow, show),
     {reply, ok, State};
 
-handle_call({set_status, FrameId, Text}, _From, State) ->
-    load_frame_and_run(FrameId, wxFrame, setStatusText, [Text]),
-    {reply, ok, State};
-
+% Panel
+%------------------------------------------------------------------
 handle_call({add_panel, FrameId, Options}, From, State) ->
-    {Id, WxPanel} = load_frame_and_run(FrameId, ?MODULE, add_panel, [Options]),
+    {Id, WxPanel} = load_control_and_run(FrameId, ?MODULE, add_panel, [Options]),
     set_control(From, Id, WxPanel),
     {reply, {panel, Id}, State};
 
+% Statusbar
+%------------------------------------------------------------------
+handle_call({add_statusbar, FrameId}, _From, State) ->
+    load_control_and_run(FrameId, wxFrame, createStatusBar),
+    {reply, ok, State};
+handle_call({set_status, FrameId, Text}, _From, State) ->
+    load_control_and_run(FrameId, wxFrame, setStatusText, [Text]),
+    {reply, ok, State};
+
+% Toolbar
+%------------------------------------------------------------------
 handle_call({add_toolbar, FrameId, Def, W, H}, From, State) ->
-    Buttons = load_frame_and_run(FrameId, ?MODULE, build_toolbar, [From, Def, W, H]),
+    Buttons = load_control_and_run(FrameId, ?MODULE, build_toolbar, [From, Def, W, H]),
     Buttons2 = [{button, Id, Title} || {Id, _WxButton, Title} <- Buttons],
     {reply, Buttons2, State};
 
-handle_call({show, {frame, FrameId}}, _From, State) ->
-    load_frame_and_run(FrameId, wxWindow, show),
+% Boxsizer
+%------------------------------------------------------------------
+handle_call({new_box_sizer, Orientation}, From, State) ->
+    Sizer = wxBoxSizer:new(Orientation),
+    Id = next_id(),
+    set_control(From, Id, Sizer),
+    {reply, {box_sizer, Id}, State};
+
+% Gridsizer
+%------------------------------------------------------------------
+handle_call({new_grid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding}, From, State) ->
+    Sizer = wxGridSizer:new(Rows, Columns, VerticlePadding, HorizontalPadding),
+    Id = next_id(),
+    set_control(From, Id, Sizer),
+    {reply, {grid_sizer, Id}, State};
+
+% Textbox constructors
+%------------------------------------------------------------------
+handle_call({new_textbox, PanelId, Options}, From, State) ->
+    Id = next_id(),
+    Textbox = load_control_and_run(PanelId, wxTextCtrl, new, [Id, Options]),
+    set_control(From, Id, Textbox),
+    {reply, {textbox, Id}, State};
+
+% Textbox manipulation functions
+%------------------------------------------------------------------
+handle_call({append_text, TextboxId, Text}, _From, State) ->
+    load_control_and_run(TextboxId, wxTextCtrl, appendText, [Text]),
+    {reply, ok, State};
+handle_call({get_text, TextboxId}, _From, State) ->
+    Text = load_control_and_run(TextboxId, wxTextCtrl, getValue),
+    {reply, Text, State};
+handle_call({set_text, TextboxId, Text}, _From, State) ->
+    load_control_and_run(TextboxId, wxTextCtrl, setValue, [Text]),
+    {reply, ok, State};
+handle_call({clear, TextboxId}, _From, State) ->
+    load_control_and_run(TextboxId, wxTextCtrl, clear),
     {reply, ok, State};
 
+% Unused wx_object callbacks
+%------------------------------------------------------------------
 handle_call(Msg, _From, State) -> {reply, {unknown_message, Msg}, State}.
-
 
 handle_info(_Msg, State) -> {noreply, State}.
 handle_cast(stop, State) -> {stop, normal, State};
@@ -80,9 +131,11 @@ handle_cast(_Msg, State) -> {noreply, State}.
 code_change(_, _, State) -> {stop, ignore, State}.
 terminate(_Reason, _State) -> ok.
 
+%%%%%
+%% TODO: break internal functions into a stand-alone module!
+%%%%%
 % Internal Functions
 %------------------------------------------------------------------
-
 new_window(Title, Options) ->
     Id = next_id(),
     WxFrame = wxFrame:new(get_wx_server(), Id, Title, Options),
@@ -94,11 +147,13 @@ new_window(Title, Options) ->
 add_panel(WxFrame, []) -> {next_id(), wxPanel:new(WxFrame)};
 add_panel(WxFrame, Options) -> {next_id(), wxPanel:new(WxFrame, Options)}.
 
-load_frame_and_run(FrameId, Mod, Fun) -> load_frame_and_run(FrameId, Mod, Fun, []).
-load_frame_and_run(FrameId, Mod, Fun, ExtraArgs) ->
-    %WxFrame = get_control(From, FrameId), % TODO: what to do if control is not found?
-    WxFrame = get_control(FrameId),
-    erlang:apply(Mod, Fun, [WxFrame|ExtraArgs]).
+% Load a wxControl by id, then invoke the given Fun with the wxControl as the first or only argument.
+% EG:   load_control_and_run(ControlId, wxFrame, setStatusText, [Text]) invokes
+%       wxFrame:setStatusText(TheWxFrameObject, Text)
+load_control_and_run(ControlId, Mod, Fun) -> load_control_and_run(ControlId, Mod, Fun, []).
+load_control_and_run(ControlId, Mod, Fun, ExtraArgs) ->
+    WxControl = get_control(ControlId), % TODO: what to do if control is not found?
+    erlang:apply(Mod, Fun, [WxControl|ExtraArgs]).
 
 build_toolbar(WxFrame, From, Def, W, H) ->
     % TODO: pass in styles
@@ -152,7 +207,6 @@ simple_window_test() ->
     Frame = {frame, _FrameId} = w:new_frame("TESTING!", [{size, {200, 200}}]),
     ok = w:add_statusbar(Frame, "Statusbar text set quickly!"),
     {panel, _PanelId} = w:add_panel(Frame),
-
     ToolbarButtonDef = [
         {"New", "wxART_NEW", "This is long help for 'New'"},
         {"Press Me", "wxART_ERROR"},
@@ -164,4 +218,26 @@ simple_window_test() ->
         {button, _B3Id, "Copy"}
     ] = w:add_toolbar(Frame, ToolbarButtonDef),
     ok = w:show(Frame),
+    ok = w_server:stop().
+
+textbox_test() ->
+    w_server:start(), %Do this in a supervision tree instead!
+    Frame = w:new_frame("Textbox tests!"),
+    Panel = w:add_panel(Frame),
+    Textbox1 = w:new_textbox(Panel),
+    Textbox2 = w:new_textbox(Panel, "This has text"),
+    ?assertEqual("", w:get_text(Textbox1)),
+    ?assertEqual("This has text", w:get_text(Textbox2)),
+    w:append_text(Textbox1, "more"),
+    w:append_text(Textbox2, "more"),
+    ?assertEqual("more", w:get_text(Textbox1)),
+    ?assertEqual("This has textmore", w:get_text(Textbox2)),
+    ok = w:clear(Textbox1),
+    ok = w:clear(Textbox2),
+    ?assertEqual("", w:get_text(Textbox1)),
+    ?assertEqual("", w:get_text(Textbox2)),
+    w:set_text(Textbox1, "Hi"),
+    w:set_text(Textbox2, "Hello"),
+    ?assertEqual("Hi", w:get_text(Textbox1)),
+    ?assertEqual("Hello", w:get_text(Textbox2)),
     ok = w_server:stop().
