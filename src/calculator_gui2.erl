@@ -15,8 +15,8 @@ init() ->
     GS = w:new_grid_sizer(5, 4, 3, 3), % for the buttons
 
     % The digit readout
-    Display = w:new_textbox(Panel), % TODO: styles: {style, ?wxTE_RIGHT}
-    w:append_child(Sizer, Display), %TODO: flags: [{flag, ?wxEXPAND bor ?wxTOP bor ?wxBOTTOM}]
+    Display = w:new_textbox(Panel, "", [align_right]),
+    w:append_child(Sizer, Display, [expand, top, bottom]),
     w:append_spacer(Sizer, 10),
 
     ButtonDef = [
@@ -35,7 +35,7 @@ init() ->
     w:fill_grid_sizer(GS, Buttons),
 
     % Put the assembled controls onto the panel
-    w:append_child(Sizer, GS), % TODO: flags: [{flag, ?wxEXPAND}]
+    w:append_child(Sizer, GS, [expand]), % TODO: this expand flag doesn't seem to do much of anything...
     w:set_sizer(Panel, Sizer),
     w:set_min_size(Sizer, 300, 200),
 

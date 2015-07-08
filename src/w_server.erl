@@ -108,10 +108,10 @@ handle_call({set_min_size, SizerId, Width, Height}, _From, State) ->
     load_control_and_run(SizerId, wxSizer, setMinSize, [Width, Height]),
     {reply, ok, State};
 
-handle_call({append_child, ParentId, ChildId}, _From, State) ->
+handle_call({append_child, ParentId, ChildId, Flags}, _From, State) ->
     WxParent = get_control(ParentId),
     WxChild = get_control(ChildId),
-    wxSizer:add(WxParent, WxChild),
+    wxSizer:add(WxParent, WxChild, Flags),
     {reply, ok, State};
 
 handle_call({append_spacer, SizerId, Amount}, _From, State) ->

@@ -109,7 +109,7 @@ make_window() ->
     add_buttons(GS, Panel, ["0", ".", "="]),
 
     % Put the assembled controls onto the panel
-    wxSizer:add(Sizer, GS, [{flag, ?wxEXPAND}]),
+    wxSizer:add(Sizer, GS, [{flag, ?wxEXPAND}])
     wxPanel:setSizer(Panel, Sizer),
     wxSizer:setMinSize(Sizer, ?SIZE),
     wxFrame:show(Frame),

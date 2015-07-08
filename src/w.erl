@@ -104,9 +104,16 @@ new_row_sizer() -> wx_object:call(?SERVER, {new_box_sizer, ?wxHORIZONTAL}).
 set_min_size({box_sizer, SizerId}, Width, Height) -> 
     wx_object:call(?SERVER, {set_min_size, SizerId, Width, Height}).
 
-append_child({box_sizer, ParentId}, {grid_sizer, ChildId}) -> append_child(ParentId, ChildId);
-append_child({box_sizer, ParentId}, {textbox, ChildId}) -> append_child(ParentId, ChildId);
-append_child(ParentId, ChildId) -> wx_object:call(?SERVER, {append_child, ParentId, ChildId}).
+
+append_child({box_sizer, ParentId}, {grid_sizer, ChildId}) -> append_child(ParentId, ChildId, []);
+append_child({box_sizer, ParentId}, {textbox, ChildId}) -> append_child(ParentId, ChildId, []).
+
+append_child({box_sizer, ParentId}, {grid_sizer, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
+append_child({box_sizer, ParentId}, {textbox, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
+
+append_child(ParentId, ChildId, Flags) -> 
+    Flags2 = to_wx_flag(Flags),
+    wx_object:call(?SERVER, {append_child, ParentId, ChildId, Flags2}).
 
 append_spacer({box_sizer, SizerId}, Amount) -> wx_object:call(?SERVER, {append_spacer, SizerId, Amount}).
 
@@ -138,7 +145,7 @@ new_textbox(PanelHandle, Text) -> new_textbox(PanelHandle, Text, []).
 %TODO: style and validators! http://www.erlang.org/doc/man/wxTextCtrl.html#new-3
 -spec new_textbox(panel_handle(), string(), textbox_options()) -> textbox_handle().
 new_textbox({panel, PanelId}, Text, Options) ->
-    Options2 = [{value, Text}|Options],
+    Options2 = to_wx_style([{value, Text}|Options]),
     wx_object:call(?SERVER, {new_textbox, PanelId, Options2}).
 
 % Textbox manipulation functions
@@ -166,10 +173,10 @@ to_wx_style(Items) when is_list(Items) ->
     {WxStyle, {others, UnmodifiedTuples}} = extract_style_codes(Items2),
     [WxStyle|UnmodifiedTuples];
 
-to_wx_style({align, left})      -> ?wxTE_LEFT;
-to_wx_style({align, center})    -> ?wxTE_CENTER;
-to_wx_style({align, right})     -> ?wxTE_RIGHT;
-to_wx_style(Unknown)            -> Unknown.
+to_wx_style(align_left)     -> ?wxTE_LEFT;
+to_wx_style(align_center)   -> ?wxTE_CENTER;
+to_wx_style(align_right)    -> ?wxTE_RIGHT;
+to_wx_style(Unknown)        -> Unknown.
 
 extract_style_codes(Items) -> extract_style_codes(Items, 0, []).
 extract_style_codes([], StyleCode, Tuples) ->
@@ -179,16 +186,43 @@ extract_style_codes([H|T], StyleCode, Tuples) when is_integer(H) ->
 extract_style_codes([H|T], StyleCode, Tuples) ->
     extract_style_codes(T, StyleCode, [H|Tuples]).
 
+% TODO combine these two features into one section!
+
+to_wx_flag(Items) when is_list(Items) -> 
+    Items2 = lists:map(fun to_wx_flag/1, Items),
+    {WxStyle, {others, UnmodifiedTuples}} = extract_flag_codes(Items2),
+    [WxStyle|UnmodifiedTuples];
+
+to_wx_flag(expand)         -> ?wxEXPAND;
+to_wx_flag(top)            -> ?wxTOP;
+to_wx_flag(bottom)         -> ?wxBOTTOM;
+to_wx_flag(Unknown)        -> Unknown.
+
+extract_flag_codes(Items) -> extract_flag_codes(Items, 0, []).
+extract_flag_codes([], FlagCode, Tuples) ->
+    {{flag, FlagCode}, {others, Tuples}};
+extract_flag_codes([H|T], FlagCode, Tuples) when is_integer(H) ->
+    extract_flag_codes(T, FlagCode bor H, Tuples);
+extract_flag_codes([H|T], FlagCode, Tuples) ->
+    extract_flag_codes(T, FlagCode, [H|Tuples]).
+
 %------------------------------------------------------------------
 % Unit tests: Move these into a separate module
 %------------------------------------------------------------------
 -include_lib("eunit/include/eunit.hrl").
 
 to_wx_style_test() ->
-    Input = [{value, "Cole"}, {align, right}, {align, center}, {size, {1,2}}, {pos, {3,4}}],
+    Input = [{value, "Cole"}, align_right, align_center, align_left, {size, {1,2}}, {pos, {3,4}}],
     Output = to_wx_style(Input),
     ?assertEqual(4, length(Output)),
     ?assertEqual({value, "Cole"}, proplists:lookup(value, Output)),
     ?assertEqual({size, {1,2}}, proplists:lookup(size, Output)),
     ?assertEqual({pos, {3,4}}, proplists:lookup(pos, Output)),
-    ?assertEqual({style, ?wxTE_RIGHT bor ?wxTE_CENTER}, proplists:lookup(style, Output)).
+    ?assertEqual({style, ?wxTE_RIGHT bor ?wxTE_CENTER bor ?wxTE_LEFT}, proplists:lookup(style, Output)).
+
+to_wx_flag_test() ->
+    Input = [{value, "Cole"}, expand, top, bottom],
+    Output = to_wx_flag(Input),
+    ?assertEqual(2, length(Output)),
+    ?assertEqual({value, "Cole"}, proplists:lookup(value, Output)),
+    ?assertEqual({flag, ?wxEXPAND bor ?wxTOP bor ?wxBOTTOM}, proplists:lookup(flag, Output)).
