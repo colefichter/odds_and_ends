@@ -80,6 +80,15 @@ handle_call({set_sizer, PanelId, SizerId}, _From, State) ->
     wxPanel:setSizer(WxPanel, WxSizer),
     {reply, ok, State};
 
+% Label
+%------------------------------------------------------------------
+handle_call({new_label, PanelId, Text}, From, State) ->
+    WxPanel = get_control(PanelId),
+    Id = next_id(),
+    WxControl = wxStaticText:new(WxPanel, Id, Text),
+    set_control(From, Id, WxControl),
+    {reply, {label, Id}, State};
+
 % Statusbar
 %------------------------------------------------------------------
 handle_call({add_statusbar, FrameId}, _From, State) ->
@@ -131,12 +140,33 @@ handle_call({fill_grid_sizer, GsId, Controls}, _From, State) ->
     fill_grid_sizer(Sizer, Controls),
     {reply, ok, State};
 
+% FlexGrid sizer
+%------------------------------------------------------------------
+handle_call({new_flexgrid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding}, From, State) ->
+    Sizer = wxFlexGridSizer:new(Rows, Columns, VerticlePadding, HorizontalPadding),
+    Id = next_id(),
+    set_control(From, Id, Sizer),
+    {reply, {flexgrid_sizer, Id}, State};
+
+handle_call({fill_flexgrid_sizer, GsId, Controls}, _From, State) ->
+    Sizer = get_control(GsId),
+    fill_grid_sizer(Sizer, Controls),
+    {reply, ok, State};
+
+handle_call({expand_row, Id, Index, Proportion}, _From, State) ->
+    load_control_and_run(Id, wxFlexGridSizer, addGrowableRow, [Index, [{proportion, Proportion}]]),
+    {reply, ok, State};
+handle_call({expand_col, Id, Index, Proportion}, _From, State) ->
+    load_control_and_run(Id, wxFlexGridSizer, addGrowableCol, [Index, [{proportion, Proportion}]]),
+    {reply, ok, State};
+
 % Buttons
 %------------------------------------------------------------------
-handle_call({new_buttons, PanelId, Def}, From, State) ->
+handle_call({new_button, PanelId, Text}, From, State) ->
     Panel = get_control(PanelId),
-    Buttons = new_buttons(Panel, From, Def),
-    {reply, Buttons, State};
+    Button = new_button(Panel, From, Text),
+    {reply, Button, State};
+
 
 % Textbox constructors
 %------------------------------------------------------------------
@@ -221,19 +251,23 @@ fill_grid_sizer(Sizer, Def) ->
     Controls = [add_to_grid_sizer(Sizer, X) || X <- Def],
     Controls.
 
+
+% TODO: pull options out. Refactor and conbine similar clauses.
 add_to_grid_sizer(Sizer, blank) ->
     wxSizer:addSpacer(Sizer, 0),
     blank;
+add_to_grid_sizer(Sizer, {label, Id}) ->
+    WxControl = get_control(Id),
+    wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: need to handle proportion too.
+add_to_grid_sizer(Sizer, {textbox, Id}) ->
+    WxControl = get_control(Id),
+    wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]);
 add_to_grid_sizer(Sizer, {button, Id, _Text}) ->
     {WxButton, _Text} = get_control(Id),
     wxSizer:add(Sizer, WxButton, [{proportion, 0}, {flag, ?wxEXPAND}]). % TODO: options!
 
-new_buttons(WxPanel, From, Def) ->
-    Buttons = [new_button(WxPanel, From, X) || X <- Def],
-    Buttons.
 
-new_button(_WxPanel, _From, blank) -> blank;
-new_button(WxPanel, From, {button, Text}) ->
+new_button(WxPanel, From, Text) ->
     Id = next_id(),
     WxButton = wxButton:new(WxPanel, Id, [{label, Text}]),
     set_control(From, Id, {WxButton, Text}),
@@ -306,19 +340,5 @@ textbox_test() ->
     ?assertEqual("Hello", w:get_text(Textbox2)),
     ok = w_server:stop().
 
-buttons_test() ->
-    w_server:start(), %Do this in a supervision tree instead!
-    Frame = w:new_frame("Textbox tests!"),
-    Panel = w:add_panel(Frame),
-    ButtonDef = [
-        {button, "First"},
-        {button, "Second"},
-        blank,
-        {button, "Third"}
-    ],
-    Buttons = w:new_buttons(Panel, ButtonDef),
-    ?assertEqual(4, length(Buttons)),
-    {button, _Id1, "First"} = lists:nth(1, Buttons),
-    {button, _Id2, "Second"} = lists:nth(2, Buttons),
-    ?assertEqual(blank, lists:nth(3, Buttons)),
-    {button, _Id3, "Third"} = lists:nth(4, Buttons).
+
+% TODO: WRITE LOTS AND LOTS OF UNIT TESTS!

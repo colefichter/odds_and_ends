@@ -12,9 +12,11 @@
 % Return types for this API:
 -type frame_handle() :: {frame, integer()}.
 -type panel_handle() :: {panel, integer()}.
+-type label_handle() :: {label, integer()}.
 -type toolbar_button_handle() :: {button, integer(), string()}.
 -type sizer_handle() :: {box_sizer, integer()}.
 -type grid_sizer_handle() :: {grid_sizer, integer()}.
+-type flexgrid_sizer_handle() :: {flexgrid_sizer, integer()}.
 -type textbox_handle() :: {textbox, integer()}.
 -type control_handle() :: blank
                         | {button, integer(), string()}.
@@ -47,7 +49,11 @@
 
 -type control_list_def() :: [control_def()].
 -type control_def() :: blank
-                     | {button, integer(), string()}.
+                     %| {button, integer(), string()}
+                     | {button, string()}
+                     | {textbox, string()}
+                     | {textbox, string(), textbox_options()}
+                     | {label, string()}.
 
 % Frame
 %------------------------------------------------------------------
@@ -70,6 +76,13 @@ add_panel({frame, FrameId}, Options) -> wx_object:call(?SERVER, {add_panel, Fram
 set_sizer({panel, PanelId}, {box_sizer, SizerId}) -> 
     wx_object:call(?SERVER, {set_sizer, PanelId, SizerId}).
 
+
+% Label
+%------------------------------------------------------------------
+-spec new_label(panel_handle(), string()) -> label_handle().
+new_label({panel, PanelId}, Text) -> wx_object:call(?SERVER, {new_label, PanelId, Text}).
+
+% TODO: get_text? set_text?
 
 % Statusbar
 %------------------------------------------------------------------
@@ -106,9 +119,11 @@ set_min_size({box_sizer, SizerId}, Width, Height) ->
 
 
 append_child({box_sizer, ParentId}, {grid_sizer, ChildId}) -> append_child(ParentId, ChildId, []);
+append_child({box_sizer, ParentId}, {flexgrid_sizer, ChildId}) -> append_child(ParentId, ChildId, []);
 append_child({box_sizer, ParentId}, {textbox, ChildId}) -> append_child(ParentId, ChildId, []).
 
 append_child({box_sizer, ParentId}, {grid_sizer, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
+append_child({box_sizer, ParentId}, {flexgrid_sizer, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
 append_child({box_sizer, ParentId}, {textbox, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
 
 append_child(ParentId, ChildId, Flags) -> 
@@ -127,12 +142,47 @@ new_grid_sizer(Rows, Columns, VerticlePadding, HorizontalPadding) ->
 -spec fill_grid_sizer(grid_sizer_handle(), control_list_def()) -> ok.
 fill_grid_sizer({grid_sizer, GsId}, Controls) -> wx_object:call(?SERVER, {fill_grid_sizer, GsId, Controls}).
 
+% TODO: how to pass expand option?
+
+% FlexGridsizer
+%------------------------------------------------------------------
+%TODO: add an overload that uses a default padding value?
+-spec new_flexgrid_sizer(integer(), integer(), integer(), integer()) -> flexgrid_sizer_handle().
+new_flexgrid_sizer(Rows, Columns, VerticlePadding, HorizontalPadding) ->
+    wx_object:call(?SERVER, {new_flexgrid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding}).
+
+-spec fill_flexgrid_sizer(flexgrid_sizer_handle(), control_list_def()) -> ok.
+fill_flexgrid_sizer({flexgrid_sizer, Id}, Controls) -> wx_object:call(?SERVER, {fill_flexgrid_sizer, Id, Controls}).
+
+% TODO: combine with fill_grid_sizer
+% TODO: how to pass expand option?
+
+%NOTE: these Index parameters are zero-based to match the C++ indices!
+expand_row(Handle = {flexgrid_sizer, _Id}, Index) -> expand_row(Handle, Index, 1).
+expand_row({flexgrid_sizer, Id}, Index, Proportion) -> 
+    wx_object:call(?SERVER, {expand_row, Id, Index, Proportion}).
+
+%NOTE: these Index parameters are zero-based to match the C++ indices!
+expand_col(Handle = {flexgrid_sizer, _Id}, Index) -> expand_col(Handle, Index, 1).
+expand_col({flexgrid_sizer, Id}, Index, Proportion) -> wx_object:call(?SERVER, {expand_col, Id, Index, Proportion}).
 
 % Buttons
 %------------------------------------------------------------------
--spec new_buttons(panel_handle(), control_list_def()) -> [control_handle()].
-new_buttons({panel, PanelId}, Def) -> wx_object:call(?SERVER, {new_buttons, PanelId, Def}).
+% -spec new_buttons(panel_handle(), control_list_def()) -> [control_handle()].
+% new_buttons({panel, PanelId}, Def) -> wx_object:call(?SERVER, {new_buttons, PanelId, Def}).
 
+new_button({panel, PanelId}, Text) -> wx_object:call(?SERVER, {new_button, PanelId, Text}).
+
+% TODO: this should make the new_buttons call obsolete!
+-spec build_controls(panel_handle(), control_list_def()) -> [control_handle()].
+build_controls(Handle = {panel, _PanelId}, Def) ->
+    [build_control(Handle, Control) || Control <- Def].
+
+build_control({panel, _PanelId}, blank) -> blank;
+build_control(Handle = {panel, _PanelId}, {button, Text}) -> new_button(Handle, Text);
+build_control(Handle = {panel, _PanelId}, {label, Text}) -> new_label(Handle, Text);
+build_control(Handle = {panel, _PanelId}, {textbox, Text}) -> new_textbox(Handle, Text);
+build_control(Handle = {panel, _PanelId}, {textbox, Text, Options}) -> new_textbox(Handle, Text, Options).
 
 % Textbox constructors
 %------------------------------------------------------------------
@@ -142,7 +192,7 @@ new_textbox(PanelHandle) -> new_textbox(PanelHandle, "", []).
 -spec new_textbox(panel_handle(), string()) -> textbox_handle().
 new_textbox(PanelHandle, Text) -> new_textbox(PanelHandle, Text, []).
 
-%TODO: style and validators! http://www.erlang.org/doc/man/wxTextCtrl.html#new-3
+%TODO: validators! http://www.erlang.org/doc/man/wxTextCtrl.html#new-3
 -spec new_textbox(panel_handle(), string(), textbox_options()) -> textbox_handle().
 new_textbox({panel, PanelId}, Text, Options) ->
     Options2 = to_wx_style([{value, Text}|Options]),
@@ -176,6 +226,7 @@ to_wx_style(Items) when is_list(Items) ->
 to_wx_style(align_left)     -> ?wxTE_LEFT;
 to_wx_style(align_center)   -> ?wxTE_CENTER;
 to_wx_style(align_right)    -> ?wxTE_RIGHT;
+to_wx_style(multiline)      -> ?wxTE_MULTILINE;
 to_wx_style(Unknown)        -> Unknown.
 
 extract_style_codes(Items) -> extract_style_codes(Items, 0, []).
@@ -193,6 +244,7 @@ to_wx_flag(Items) when is_list(Items) ->
     {WxStyle, {others, UnmodifiedTuples}} = extract_flag_codes(Items2),
     [WxStyle|UnmodifiedTuples];
 
+to_wx_flag(all)            -> ?wxALL;
 to_wx_flag(expand)         -> ?wxEXPAND;
 to_wx_flag(top)            -> ?wxTOP;
 to_wx_flag(bottom)         -> ?wxBOTTOM;
@@ -206,19 +258,33 @@ extract_flag_codes([H|T], FlagCode, Tuples) when is_integer(H) ->
 extract_flag_codes([H|T], FlagCode, Tuples) ->
     extract_flag_codes(T, FlagCode, [H|Tuples]).
 
+
+
+% Experimental data binding.
+%------------------------------------------------------------------
+bind_values_to_controls([], []) -> ok;
+bind_values_to_controls([{textbox, Id}|OtherControls], [Text|OtherValues]) ->
+    w:set_text({textbox, Id}, Text),
+    bind_values_to_controls(OtherControls, OtherValues);
+
+%Ignore other types of controls. This way, we can bind to a mixed list without binding to, for example, labels.
+bind_values_to_controls([{_, _Id}|OtherControls], Values) -> bind_values_to_controls(OtherControls, Values).
+
+
+
 %------------------------------------------------------------------
 % Unit tests: Move these into a separate module
 %------------------------------------------------------------------
 -include_lib("eunit/include/eunit.hrl").
 
 to_wx_style_test() ->
-    Input = [{value, "Cole"}, align_right, align_center, align_left, {size, {1,2}}, {pos, {3,4}}],
+    Input = [{value, "Cole"}, align_right, align_center, align_left, multiline, {size, {1,2}}, {pos, {3,4}}],
     Output = to_wx_style(Input),
     ?assertEqual(4, length(Output)),
     ?assertEqual({value, "Cole"}, proplists:lookup(value, Output)),
     ?assertEqual({size, {1,2}}, proplists:lookup(size, Output)),
     ?assertEqual({pos, {3,4}}, proplists:lookup(pos, Output)),
-    ?assertEqual({style, ?wxTE_RIGHT bor ?wxTE_CENTER bor ?wxTE_LEFT}, proplists:lookup(style, Output)).
+    ?assertEqual({style, ?wxTE_RIGHT bor ?wxTE_CENTER bor ?wxTE_LEFT bor ?wxTE_MULTILINE}, proplists:lookup(style, Output)).
 
 to_wx_flag_test() ->
     Input = [{value, "Cole"}, expand, top, bottom],
@@ -226,3 +292,7 @@ to_wx_flag_test() ->
     ?assertEqual(2, length(Output)),
     ?assertEqual({value, "Cole"}, proplists:lookup(value, Output)),
     ?assertEqual({flag, ?wxEXPAND bor ?wxTOP bor ?wxBOTTOM}, proplists:lookup(flag, Output)).
+
+
+
+% TODO: WRITE LOTS AND LOTS OF UNIT TESTS!

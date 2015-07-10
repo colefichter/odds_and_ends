@@ -31,7 +31,7 @@ init() ->
         % Bottom button row
         blank, {button, "0"}, {button, "."}, {button, "="}
     ],
-    Buttons = w:new_buttons(Panel, ButtonDef),
+    Buttons = w:build_controls(Panel, ButtonDef),
     w:fill_grid_sizer(GS, Buttons),
 
     % Put the assembled controls onto the panel
