@@ -67,8 +67,8 @@ show({frame, FrameId}) -> wx_object:call(?SERVER, {show, {frame, FrameId}}).
 
 % Panel
 %------------------------------------------------------------------
--spec add_panel(panel_handle()) -> panel_handle().
--spec add_panel(panel_handle(), panel_options()) -> panel_handle(). 
+-spec add_panel(frame_handle()) -> panel_handle().
+-spec add_panel(frame_handle(), panel_options()) -> panel_handle(). 
 add_panel({frame, FrameId}) -> add_panel({frame, FrameId}, []).
 add_panel({frame, FrameId}, Options) -> wx_object:call(?SERVER, {add_panel, FrameId, Options}).
 
@@ -294,5 +294,26 @@ to_wx_flag_test() ->
     ?assertEqual({flag, ?wxEXPAND bor ?wxTOP bor ?wxBOTTOM}, proplists:lookup(flag, Output)).
 
 
+-define(CONTROLS, [blank, {button, "Button 1"}, {label, "This is a label"},
+                    {textbox, "Textbox 1"}]).
+
+build_controls_test() ->
+    w_server:start(),
+    Frame = new_frame("My Frame"),
+    Panel = add_panel(Frame),
+    [Blank, B1, L1, T1] = build_controls(Panel, ?CONTROLS),
+    ?assertEqual(blank, Blank),
+    {button, B1Id, "Button 1"} = B1,
+    ?assert(is_integer(B1Id)),
+    {label, L1Id} = L1,
+    ?assert(is_integer(L1Id)),
+    ?assertNotEqual(B1Id, L1Id),
+    {textbox, T1Id} = T1,
+    ?assert(is_integer(T1Id)),
+    ?assertNotEqual(L1Id, T1Id),
+    ?assertEqual("Textbox 1", get_text(T1)),
+    % TODO: test textbox creation with options!
+    w_server:stop().
 
 % TODO: WRITE LOTS AND LOTS OF UNIT TESTS!
+
