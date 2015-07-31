@@ -182,6 +182,7 @@ build_control({panel, _PanelId}, blank) -> blank;
 build_control(Handle = {panel, _PanelId}, {button, Text}) -> new_button(Handle, Text);
 build_control(Handle = {panel, _PanelId}, {label, Text}) -> new_label(Handle, Text);
 build_control(Handle = {panel, _PanelId}, {textbox, Text}) -> new_textbox(Handle, Text);
+build_control(Handle = {panel, _PanelId}, {listbox}) -> new_listbox(Handle);
 build_control(Handle = {panel, _PanelId}, {textbox, Text, Options}) -> new_textbox(Handle, Text, Options).
 
 % Textbox constructors
@@ -211,6 +212,24 @@ set_text({textbox, TextboxId}, Text) -> wx_object:call(?SERVER, {set_text, Textb
 
 -spec clear(textbox_handle()) -> ok.
 clear({textbox, TextboxId}) -> wx_object:call(?SERVER, {clear, TextboxId}).
+
+
+
+
+% Listbox constructors
+%------------------------------------------------------------------
+
+% TODO: SPEC
+% TODO: add options and listitems here ??
+% TODO: size needs to be an option!
+% TODO: multi-select listboxes?
+new_listbox({panel, PanelId}) -> wx_object:call(?SERVER, {new_listbox, PanelId}).
+
+
+% Listbox manipulation functions
+%------------------------------------------------------------------
+fill_listbox({listbox, Id}, Items) -> wx_object:call(?SERVER, {fill_listbox, Id, Items}).
+
 
 % Helpful utils to make WX easier to work with
 %------------------------------------------------------------------
@@ -266,9 +285,17 @@ bind_values_to_controls([], []) -> ok;
 bind_values_to_controls([{textbox, Id}|OtherControls], [Text|OtherValues]) ->
     w:set_text({textbox, Id}, Text),
     bind_values_to_controls(OtherControls, OtherValues);
+bind_values_to_controls([{listbox, Id}|OtherControls], [ListItems|OtherValues]) ->
+    w:fill_listbox({listbox, Id}, ListItems),
+    bind_values_to_controls(OtherControls, OtherValues);
 
 %Ignore other types of controls. This way, we can bind to a mixed list without binding to, for example, labels.
 bind_values_to_controls([{_, _Id}|OtherControls], Values) -> bind_values_to_controls(OtherControls, Values).
+
+
+
+
+
 
 
 
@@ -315,5 +342,53 @@ build_controls_test() ->
     % TODO: test textbox creation with options!
     w_server:stop().
 
-% TODO: WRITE LOTS AND LOTS OF UNIT TESTS!
+simple_window_test() ->
+    w_server:start(), %Do this in a supervision tree instead!
+    Frame = {frame, _FrameId} = w:new_frame("TESTING!", [{size, {200, 200}}]),
+    ok = w:add_statusbar(Frame, "Statusbar text set quickly!"),
+    {panel, _PanelId} = w:add_panel(Frame),
+    ToolbarButtonDef = [
+        {"New", "wxART_NEW", "This is long help for 'New'"},
+        {"Press Me", "wxART_ERROR"},
+        {"Copy", "wxART_COPY", "Copy something to the clipboard"} %Long Help ends up in status bar!
+    ],
+    [
+        {button, _B1Id, "New"},
+        {button, _B2Id, "Press Me"},
+        {button, _B3Id, "Copy"}
+    ] = w:add_toolbar(Frame, ToolbarButtonDef),
+    ok = w:show(Frame),
+    ok = w_server:stop().
 
+textbox_test() ->
+    w_server:start(), %Do this in a supervision tree instead!
+    Frame = w:new_frame("Textbox tests!"),
+    Panel = w:add_panel(Frame),
+    Textbox1 = w:new_textbox(Panel),
+    Textbox2 = w:new_textbox(Panel, "This has text"),
+    ?assertEqual("", w:get_text(Textbox1)),
+    ?assertEqual("This has text", w:get_text(Textbox2)),
+    w:append_text(Textbox1, "more"),
+    w:append_text(Textbox2, "more"),
+    ?assertEqual("more", w:get_text(Textbox1)),
+    ?assertEqual("This has textmore", w:get_text(Textbox2)),
+    ok = w:clear(Textbox1),
+    ok = w:clear(Textbox2),
+    ?assertEqual("", w:get_text(Textbox1)),
+    ?assertEqual("", w:get_text(Textbox2)),
+    w:set_text(Textbox1, "Hi"),
+    w:set_text(Textbox2, "Hello"),
+    ?assertEqual("Hi", w:get_text(Textbox1)),
+    ?assertEqual("Hello", w:get_text(Textbox2)),
+    ok = w_server:stop().
+
+listbox_test() ->
+    w_server:start(), %Do this in a supervision tree instead!
+    Genres = ["Comedy", "Drama", "Epic", "Erotic", "Nonsense"],
+    Frame = w:new_frame("Listbox tests!"),
+    Panel = w:add_panel(Frame),
+    Listbox = w:new_listbox(Panel),
+    bind_values_to_controls([Listbox], [Genres]),
+    ok = w_server:stop().
+
+% TODO: WRITE LOTS AND LOTS OF UNIT TESTS!

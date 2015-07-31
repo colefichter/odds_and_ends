@@ -191,6 +191,20 @@ handle_call({clear, TextboxId}, _From, State) ->
     load_control_and_run(TextboxId, wxTextCtrl, clear),
     {reply, ok, State};
 
+% Listbox constructors
+%------------------------------------------------------------------
+handle_call({new_listbox, PanelId}, From, State) ->
+    Id = next_id(),
+    Listbox = load_control_and_run(PanelId, wxListBox, new, [Id, [{size, {-1,50}}]]), % TODO: size needs to be an option!
+    set_control(From, Id, Listbox),
+    {reply, {listbox, Id}, State};
+
+% Listbox manipulation functions
+%------------------------------------------------------------------
+handle_call({fill_listbox, ListboxId, Items}, _From, State) ->
+    load_control_and_run(ListboxId, wxListBox, set, [Items]),
+    {reply, ok, State};
+
 % Unused wx_object callbacks
 %------------------------------------------------------------------
 handle_call(Msg, _From, State) -> {reply, {unknown_message, Msg}, State}.
@@ -261,7 +275,12 @@ add_to_grid_sizer(Sizer, {label, Id}) ->
     wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: need to handle proportion too.
 add_to_grid_sizer(Sizer, {textbox, Id}) ->
     WxControl = get_control(Id),
-    wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]);
+    wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: does it make sense to have this as a default?
+
+add_to_grid_sizer(Sizer, {listbox, Id}) ->
+    WxControl = get_control(Id),
+    wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: options??
+
 add_to_grid_sizer(Sizer, {button, Id, _Text}) ->
     {WxButton, _Text} = get_control(Id),
     wxSizer:add(Sizer, WxButton, [{proportion, 0}, {flag, ?wxEXPAND}]). % TODO: options!
@@ -299,46 +318,5 @@ set_control({ClientPid, _}, ControlId, Control) ->
 %------------------------------------------------------------------
 
 -include_lib("eunit/include/eunit.hrl").
-
-simple_window_test() ->
-    w_server:start(), %Do this in a supervision tree instead!
-    Frame = {frame, _FrameId} = w:new_frame("TESTING!", [{size, {200, 200}}]),
-    ok = w:add_statusbar(Frame, "Statusbar text set quickly!"),
-    {panel, _PanelId} = w:add_panel(Frame),
-    ToolbarButtonDef = [
-        {"New", "wxART_NEW", "This is long help for 'New'"},
-        {"Press Me", "wxART_ERROR"},
-        {"Copy", "wxART_COPY", "Copy something to the clipboard"} %Long Help ends up in status bar!
-    ],
-    [
-        {button, _B1Id, "New"},
-        {button, _B2Id, "Press Me"},
-        {button, _B3Id, "Copy"}
-    ] = w:add_toolbar(Frame, ToolbarButtonDef),
-    ok = w:show(Frame),
-    ok = w_server:stop().
-
-textbox_test() ->
-    w_server:start(), %Do this in a supervision tree instead!
-    Frame = w:new_frame("Textbox tests!"),
-    Panel = w:add_panel(Frame),
-    Textbox1 = w:new_textbox(Panel),
-    Textbox2 = w:new_textbox(Panel, "This has text"),
-    ?assertEqual("", w:get_text(Textbox1)),
-    ?assertEqual("This has text", w:get_text(Textbox2)),
-    w:append_text(Textbox1, "more"),
-    w:append_text(Textbox2, "more"),
-    ?assertEqual("more", w:get_text(Textbox1)),
-    ?assertEqual("This has textmore", w:get_text(Textbox2)),
-    ok = w:clear(Textbox1),
-    ok = w:clear(Textbox2),
-    ?assertEqual("", w:get_text(Textbox1)),
-    ?assertEqual("", w:get_text(Textbox2)),
-    w:set_text(Textbox1, "Hi"),
-    w:set_text(Textbox2, "Hello"),
-    ?assertEqual("Hi", w:get_text(Textbox1)),
-    ?assertEqual("Hello", w:get_text(Textbox2)),
-    ok = w_server:stop().
-
 
 % TODO: WRITE LOTS AND LOTS OF UNIT TESTS!
