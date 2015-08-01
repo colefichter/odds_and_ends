@@ -29,13 +29,20 @@ init([RepoModule]) ->
     UselessWindow = wxWindow:new(),
     {UselessWindow, []}.
 
-% Terminate the process loop when the window closes.
-handle_event(#wx{event=#wxClose{}}, State) -> 
-    % TODO: TEST! This is probably wrong, since this server manages a bunch of controls.
-    % Cleanup the state related to the closing window.
-    {stop, normal, State};
-handle_event(_Msg = #wx{id=?wxID_EXIT}, State) -> 
+% Terminate the process loop when the window closes (via the close button X in the top corner).
+handle_event(Msg = #wx{id=ControlId, event=#wxClose{}}, State) -> 
+    io:format("*** wxClose. ~p~n   STATE: ~p~n", [Msg, State]),
+    % Simulate closing the window. This allows the client PID to access state as long as needed.
+    % When the client PID exits, we'll destroy the WX state for real.
+    WxControl = get_control(ControlId),
+    wxWindow:hide(WxControl), 
+    % Send callback so the GUI can cleanup get state of window controls:
+    ClientPid = get_owner_pid(ControlId),
+    ClientPid ! {closing, {frame, ControlId}},
+    {noreply, State};
+handle_event(Msg = #wx{id=?wxID_EXIT}, State) -> 
     % TODO: this is wrong. Cleanup state (which is not in State).
+    io:format("*** wxID_EXIT. ~p~n   STATE: ~p~n", [Msg, State]),
     wxWindow:destroy(State),
     {noreply, State};
 % Handle menu & toolbar click events:
@@ -62,6 +69,9 @@ handle_event(_Msg, State) -> {noreply, State}.
 handle_call({new_frame, Title, Options}, From, State) ->
     {Id, WxFrame} = new_window(Title, Options), %TODO: options
     set_control(From, Id, WxFrame),
+    {ClientPid, _} = From,
+    % This can cause multiple DOWN messages to be sent. Can we prevent that from happening?
+    erlang:monitor(process, ClientPid),
     {reply, {frame, Id}, State};
 handle_call({show, {frame, FrameId}}, _From, State) ->
     load_control_and_run(FrameId, wxWindow, show),
@@ -209,6 +219,10 @@ handle_call({fill_listbox, ListboxId, Items}, _From, State) ->
 %------------------------------------------------------------------
 handle_call(Msg, _From, State) -> {reply, {unknown_message, Msg}, State}.
 
+handle_info({'DOWN', Ref, process, ClientPid, Reason}, State) ->
+    io:format("CLEANUP CONTROLS ~p ~p ~p~n", [Ref, ClientPid, Reason]),
+    cleanup_all_controls(ClientPid),
+    {noreply, State};
 handle_info(_Msg, State) -> {noreply, State}.
 handle_cast(stop, State) -> {stop, normal, State};
 handle_cast(_Msg, State) -> {noreply, State}.
@@ -293,6 +307,29 @@ new_button(WxPanel, From, Text) ->
     {button, Id, Text}.
 
 
+cleanup_all_controls(ClientPid) ->
+    Controls = get_controls_by_owner_pid(ClientPid),
+    cleanup(Controls).
+
+cleanup([]) -> ok;
+cleanup([{Id, _Pid, WxControl}|T]) ->
+    io:format(" deleting control ~p ~p~n", [Id, WxControl]),
+    % WxWindow is the base class for most controls, but not invisible things like sizers.
+    % TODO: test. This may fail for sizers and other controls. We are probably going
+    % to have to refactor the storage record into something that keeps track of our handle
+    % type so that we can destroy things correctly.
+    wxWindow:destroy(WxControl),
+    remove_control(Id),
+    cleanup(T).
+
+
+
+% TODO: refactor the REPO stuff to use a record
+% TODO: we're going to have to store the w type (eg: frame, panel, textbox, etc.)
+%  so that we can figure out what kind of a thing each control instance is without
+%  just assuming the type based on the context of the current request.
+
+
 
 % Wrapper around the repo:
 %------------------------------------------------------------------
@@ -312,11 +349,7 @@ get_control(ControlId) ->
     WxControl.
 set_control({ClientPid, _}, ControlId, Control) ->
     (repo()):set_control(ControlId, ClientPid, Control).
-
-%------------------------------------------------------------------
-% Unit tests: Move these into a separate module
-%------------------------------------------------------------------
-
--include_lib("eunit/include/eunit.hrl").
-
-% TODO: WRITE LOTS AND LOTS OF UNIT TESTS!
+remove_control(ControlId) ->
+    ok = (repo()):remove_control(ControlId).
+get_controls_by_owner_pid(OwnerPid) ->
+    (repo()):get_controls_by_owner_pid(OwnerPid).

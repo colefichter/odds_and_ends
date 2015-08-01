@@ -67,6 +67,8 @@ show({frame, FrameId}) -> wx_object:call(?SERVER, {show, {frame, FrameId}}).
 
 % Panel
 %------------------------------------------------------------------
+
+% TODO: rename this to new_panel to match others?
 -spec add_panel(frame_handle()) -> panel_handle().
 -spec add_panel(frame_handle(), panel_options()) -> panel_handle(). 
 add_panel({frame, FrameId}) -> add_panel({frame, FrameId}, []).
@@ -220,6 +222,7 @@ clear({textbox, TextboxId}) -> wx_object:call(?SERVER, {clear, TextboxId}).
 %------------------------------------------------------------------
 
 % TODO: SPEC
+% TODO: handle definitions
 % TODO: add options and listitems here ??
 % TODO: size needs to be an option!
 % TODO: multi-select listboxes?

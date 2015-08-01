@@ -2,7 +2,9 @@
 
 % A simple repository that stores data in the process dictionary.
 
--export([set_wx_server/1, get_wx_server/0, create_identity/0, next_id/0, get_control/1, set_control/3]).
+-export([set_wx_server/1, get_wx_server/0, 
+         create_identity/0, next_id/0, 
+         get_control/1, set_control/3, remove_control/1, get_controls_by_owner_pid/1]).
 
 -define(WXSERVER, wx_server).
 -define(IDENTITY, identity).
@@ -45,6 +47,20 @@ set_control(ControlId, OwnerPid, Control) ->
     NewEnv = dict:store(ControlId, {ControlId, OwnerPid, Control}, Env),
     set_env(NewEnv),
     ok.
+
+remove_control(ControlId) ->
+    Env = get_env(),
+    NewEnv = dict:erase(ControlId, Env),
+    set_env(NewEnv),
+    ok.
+
+get_controls_by_owner_pid(OwnerPid) ->
+    Env = get_env(),
+    ControlDict = dict:filter(fun(ControlId,{ControlId, Pid, _Control}) -> 
+        OwnerPid == Pid        
+    end, Env),
+    Controls = dict:fold(fun(_K,V,L) -> [V|L] end, [], ControlDict),
+    Controls.
 
 %------------------------------------------------------------------
 % Unit Tests
