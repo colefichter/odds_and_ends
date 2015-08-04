@@ -10,6 +10,7 @@
 % Exports for convenience
 -export([add_panel/2, build_toolbar/5]).
 
+-include_lib("w.hrl").
 -include_lib("wx/include/wx.hrl").
 
 % Client API
@@ -129,7 +130,10 @@ handle_call({set_min_size, SizerId, Width, Height}, _From, State) ->
 
 handle_call({append_child, ParentId, ChildId, Flags}, _From, State) ->
     WxParent = get_control(ParentId),
-    WxChild = get_control(ChildId),
+    WxChild = case get_control(ChildId) of  % TODO: RECORD... this is getting silly.
+        {WxRef, _Text} -> WxRef;
+        WxRef -> WxRef
+    end,
     wxSizer:add(WxParent, WxChild, Flags),
     {reply, ok, State};
 
@@ -297,7 +301,11 @@ add_to_grid_sizer(Sizer, {listbox, Id}) ->
 
 add_to_grid_sizer(Sizer, {button, Id, _Text}) ->
     {WxButton, _Text} = get_control(Id),
-    wxSizer:add(Sizer, WxButton, [{proportion, 0}, {flag, ?wxEXPAND}]). % TODO: options!
+    wxSizer:add(Sizer, WxButton, [{proportion, 0}, {flag, ?wxEXPAND}]); % TODO: options!
+
+add_to_grid_sizer(Sizer, {box_sizer, Id}) ->
+    WxChildSizer = get_control(Id),
+    wxSizer:add(Sizer, WxChildSizer, []). % TODO: options
 
 
 new_button(WxPanel, From, Text) ->
@@ -318,10 +326,12 @@ cleanup([{Id, _Pid, WxControl}|T]) ->
     % TODO: test. This may fail for sizers and other controls. We are probably going
     % to have to refactor the storage record into something that keeps track of our handle
     % type so that we can destroy things correctly.
-    wxWindow:destroy(WxControl),
+    try wxWindow:destroy(WxControl) 
+    catch _:_ ->
+        try wxBoxSizer:destroy(WxControl) catch _:_ -> io:format("*** wxSizer:destroy failed for control ~p~n", [WxControl]) end
+    end,
     remove_control(Id),
     cleanup(T).
-
 
 
 % TODO: refactor the REPO stuff to use a record
@@ -330,6 +340,17 @@ cleanup([{Id, _Pid, WxControl}|T]) ->
 %  just assuming the type based on the context of the current request.
 
 
+
+% Record Manipulation
+%------------------------------------------------------------------
+type_of(R) when is_record(R, control) -> R#control.type.
+id_of(R) when is_record(R, control) -> R#control.id.
+text_of(R) when is_record(R, control) -> R#control.text.
+owner_of(R) when is_record(R, control) -> R#control.owner_pid.
+wx_control_of(R) when is_record(R, control) -> R#control.wx_control.
+
+to_record(Id, Type) -> #control{id=Id, type=Type}.
+to_record(Id, Type, Text) -> #control{id=Id, type=Type, text=Text}.
 
 % Wrapper around the repo:
 %------------------------------------------------------------------
@@ -353,3 +374,26 @@ remove_control(ControlId) ->
     ok = (repo()):remove_control(ControlId).
 get_controls_by_owner_pid(OwnerPid) ->
     (repo()):get_controls_by_owner_pid(OwnerPid).
+
+
+%------------------------------------------------------------------
+% Unit tests: Move these into a separate module
+%------------------------------------------------------------------
+-include_lib("eunit/include/eunit.hrl").
+
+to_record_test() ->
+    R1 = to_record(999, textbox),
+    ?assertEqual(999, id_of(R1)),
+    ?assertEqual(textbox, type_of(R1)),
+    R2 = to_record(1000, listbox, "Some Text"),
+    ?assertEqual(1000, id_of(R2)),
+    ?assertEqual(listbox, type_of(R2)),
+    ?assertEqual("Some Text", text_of(R2)).
+
+simple_record_test() ->
+    R = #control{id=999, type=button, owner_pid=self(), text="Fake Button", wx_control={test}},
+    ?assertEqual(button, type_of(R)),
+    ?assertEqual(999, id_of(R)),
+    ?assertEqual(self(), owner_of(R)),
+    ?assertEqual("Fake Button", text_of(R)),
+    ?assertEqual({test}, wx_control_of(R)).

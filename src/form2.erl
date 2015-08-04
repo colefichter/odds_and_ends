@@ -9,19 +9,26 @@ init() ->
 
     Frame = w:new_frame("Whatchamacallit Form", [{size, {300, 400}}]),
     Panel = w:add_panel(Frame),
-    HBox = w:new_row_sizer(),
-    FlexGridSizer = w:new_flexgrid_sizer(4, 2, 9, 25),
+    HBox = w:new_column_sizer(),
+    ButtonBox = w:new_row_sizer(),
+    FlexGridSizer = w:new_flexgrid_sizer(5, 2, 9, 25),
 
     ControlDef = [
         {label, "Title"}, {textbox, ""}, % Just for fun, we'll use data binding (below).
         {label, "Author"}, {textbox, ""},
         {label, "Genre"}, {listbox},
-        {label, "Review"}, {textbox, "", [multiline]}
+        {label, "Review"}, {textbox, "", [multiline]},
+        blank % This keeps the buttons in the right column.
     ],
     Controls = w:build_controls(Panel, ControlDef),
 
+    % This is a bit clumsy, but I want two buttons in the right column, beneath the textboxes:
+    ButtonDef = [{button, "Save"}, {button, "Cancel"}],
+    Buttons = w:build_controls(Panel, ButtonDef),    
+    [w:append_child(ButtonBox, B, [center]) || B <- Buttons],
+
     % TODO: how to send EXPAND flag?
-    w:fill_flexgrid_sizer(FlexGridSizer, Controls),
+    w:fill_flexgrid_sizer(FlexGridSizer, Controls ++ [ButtonBox]),
 
     % Make the multiline Review TB (in the 3rd row) grow vertically when the window is resized.    
     w:expand_row(FlexGridSizer, 3), %NOTE: the index is zero-based!
@@ -43,9 +50,15 @@ init() ->
     w:show(Frame),
     loop().
 
-
 loop() ->
-    receive Msg ->
-        io:format("CALLBACK ~p~n", [Msg]),
-        loop()
-    end.
+    receive 
+        {click, {button, _Id, "Save"}} ->
+            io:format("Saving values: TODO get values~n"),
+            exit(normal);
+        {click, {button, _Id, "Cancel"}} ->
+            io:format("Cancelling~n"),
+            exit(normal);
+        Msg ->
+            io:format("CALLBACK ~p~n", [Msg])            
+    end,
+    loop().

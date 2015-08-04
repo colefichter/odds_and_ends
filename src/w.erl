@@ -120,18 +120,26 @@ set_min_size({box_sizer, SizerId}, Width, Height) ->
     wx_object:call(?SERVER, {set_min_size, SizerId, Width, Height}).
 
 
+
+% TODO: appending spacers and children should work more like filling the grid sizer. See form2 example where the buttons are added.
+
 append_child({box_sizer, ParentId}, {grid_sizer, ChildId}) -> append_child(ParentId, ChildId, []);
 append_child({box_sizer, ParentId}, {flexgrid_sizer, ChildId}) -> append_child(ParentId, ChildId, []);
-append_child({box_sizer, ParentId}, {textbox, ChildId}) -> append_child(ParentId, ChildId, []).
+append_child({box_sizer, ParentId}, {textbox, ChildId}) -> append_child(ParentId, ChildId, []);
+append_child({box_sizer, ParentId}, {button, ChildId, _Text}) -> append_child(ParentId, ChildId, []);
+append_child({box_sizer, ParentId}, {box_sizer, ChildId}) -> append_child(ParentId, ChildId, []).
 
 append_child({box_sizer, ParentId}, {grid_sizer, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
 append_child({box_sizer, ParentId}, {flexgrid_sizer, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
 append_child({box_sizer, ParentId}, {textbox, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
+append_child({box_sizer, ParentId}, {button, ChildId, _Text}, Options) -> append_child(ParentId, ChildId, Options);
+append_child({box_sizer, ParentId}, {box_sizer, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
 
 append_child(ParentId, ChildId, Flags) -> 
     Flags2 = to_wx_flag(Flags),
     wx_object:call(?SERVER, {append_child, ParentId, ChildId, Flags2}).
 
+append_spacer({box_sizer, ParentId}) -> append_spacer({box_sizer, ParentId}, 0).
 append_spacer({box_sizer, SizerId}, Amount) -> wx_object:call(?SERVER, {append_spacer, SizerId, Amount}).
 
 % Gridsizer
@@ -270,6 +278,7 @@ to_wx_flag(all)            -> ?wxALL;
 to_wx_flag(expand)         -> ?wxEXPAND;
 to_wx_flag(top)            -> ?wxTOP;
 to_wx_flag(bottom)         -> ?wxBOTTOM;
+to_wx_flag(center)         -> ?wxCENTER;
 to_wx_flag(Unknown)        -> Unknown.
 
 extract_flag_codes(Items) -> extract_flag_codes(Items, 0, []).
@@ -293,7 +302,7 @@ bind_values_to_controls([{listbox, Id}|OtherControls], [ListItems|OtherValues]) 
     bind_values_to_controls(OtherControls, OtherValues);
 
 %Ignore other types of controls. This way, we can bind to a mixed list without binding to, for example, labels.
-bind_values_to_controls([{_, _Id}|OtherControls], Values) -> bind_values_to_controls(OtherControls, Values).
+bind_values_to_controls([_AnythingElse|OtherControls], Values) -> bind_values_to_controls(OtherControls, Values).
 
 
 
