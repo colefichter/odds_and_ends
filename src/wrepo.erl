@@ -4,17 +4,12 @@
 
 -export([set_wx_server/1, get_wx_server/0, 
          create_identity/0, next_id/0, 
-         get_control/1, set_control/3, remove_control/1, get_controls_by_owner_pid/1]).
+         get_control/1, set_control/2, remove_control/1, get_controls_by_owner_pid/1]).
 
 -define(WXSERVER, wx_server).
 -define(IDENTITY, identity).
 
-% -record(env, {
-%         pid,
-%         % frames = [],
-%         % panels = []
-%         controls = dict:new() % Should this be an orddict (or something else)?
-% }).
+-include_lib("w.hrl").
 
 set_wx_server(Server) -> 
     put(?WXSERVER, Server),
@@ -42,9 +37,9 @@ get_control(ControlId) ->
     % Should return something like: {ok, {ControlId, Pid, Control}}
     dict:find(ControlId, Env).
 
-set_control(ControlId, OwnerPid, Control) ->
+set_control(ControlId, Control) when is_record(Control, control) ->
     Env = get_env(),
-    NewEnv = dict:store(ControlId, {ControlId, OwnerPid, Control}, Env),
+    NewEnv = dict:store(ControlId, Control, Env),
     set_env(NewEnv),
     ok.
 
@@ -56,8 +51,8 @@ remove_control(ControlId) ->
 
 get_controls_by_owner_pid(OwnerPid) ->
     Env = get_env(),
-    ControlDict = dict:filter(fun(ControlId,{ControlId, Pid, _Control}) -> 
-        OwnerPid == Pid        
+    ControlDict = dict:filter(fun(_ControlId, Control) -> 
+        OwnerPid == Control#control.owner_pid
     end, Env),
     Controls = dict:fold(fun(_K,V,L) -> [V|L] end, [], ControlDict),
     Controls.
@@ -70,9 +65,9 @@ get_controls_by_owner_pid(OwnerPid) ->
 
 set_get_control_test() ->
     ?assertEqual(error, get_control(5)),
-    Control = {my, control, is, here},
-    ?assertEqual(ok, set_control(5, self(), Control)),
-    ?assertEqual({ok, {5, self(), Control}}, get_control(5)).
+    Control = #control{owner_pid=self(), id=5, type=button, wx_control={nothing_here}},
+    ?assertEqual(ok, set_control(5, Control)),
+    ?assertEqual({ok, Control}, get_control(5)).
 
 set_get_wx_server_test() ->
     ?assertEqual(ok, set_wx_server(blah)),

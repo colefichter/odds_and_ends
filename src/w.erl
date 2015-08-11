@@ -67,13 +67,10 @@ show({frame, FrameId}) -> wx_object:call(?SERVER, {show, {frame, FrameId}}).
 
 % Panel
 %------------------------------------------------------------------
-
-% TODO: rename this to new_panel to match others?
--spec add_panel(frame_handle()) -> panel_handle().
--spec add_panel(frame_handle(), panel_options()) -> panel_handle(). 
-add_panel({frame, FrameId}) -> add_panel({frame, FrameId}, []).
-add_panel({frame, FrameId}, Options) -> wx_object:call(?SERVER, {add_panel, FrameId, Options}).
-
+-spec new_panel(frame_handle()) -> panel_handle().
+-spec new_panel(frame_handle(), panel_options()) -> panel_handle(). 
+new_panel({frame, FrameId}) -> new_panel({frame, FrameId}, []).
+new_panel({frame, FrameId}, Options) -> wx_object:call(?SERVER, {new_panel, FrameId, Options}).
 
 set_sizer({panel, PanelId}, {box_sizer, SizerId}) -> 
     wx_object:call(?SERVER, {set_sizer, PanelId, SizerId}).
@@ -339,7 +336,7 @@ to_wx_flag_test() ->
 build_controls_test() ->
     w_server:start(),
     Frame = new_frame("My Frame"),
-    Panel = add_panel(Frame),
+    Panel = new_panel(Frame),
     [Blank, B1, L1, T1] = build_controls(Panel, ?CONTROLS),
     ?assertEqual(blank, Blank),
     {button, B1Id, "Button 1"} = B1,
@@ -358,7 +355,7 @@ simple_window_test() ->
     w_server:start(), %Do this in a supervision tree instead!
     Frame = {frame, _FrameId} = w:new_frame("TESTING!", [{size, {200, 200}}]),
     ok = w:add_statusbar(Frame, "Statusbar text set quickly!"),
-    {panel, _PanelId} = w:add_panel(Frame),
+    {panel, _PanelId} = w:new_panel(Frame),
     ToolbarButtonDef = [
         {"New", "wxART_NEW", "This is long help for 'New'"},
         {"Press Me", "wxART_ERROR"},
@@ -375,7 +372,7 @@ simple_window_test() ->
 textbox_test() ->
     w_server:start(), %Do this in a supervision tree instead!
     Frame = w:new_frame("Textbox tests!"),
-    Panel = w:add_panel(Frame),
+    Panel = w:new_panel(Frame),
     Textbox1 = w:new_textbox(Panel),
     Textbox2 = w:new_textbox(Panel, "This has text"),
     ?assertEqual("", w:get_text(Textbox1)),
@@ -398,7 +395,7 @@ listbox_test() ->
     w_server:start(), %Do this in a supervision tree instead!
     Genres = ["Comedy", "Drama", "Epic", "Erotic", "Nonsense"],
     Frame = w:new_frame("Listbox tests!"),
-    Panel = w:add_panel(Frame),
+    Panel = w:new_panel(Frame),
     Listbox = w:new_listbox(Panel),
     bind_values_to_controls([Listbox], [Genres]),
     ok = w_server:stop().

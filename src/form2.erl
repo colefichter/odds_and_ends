@@ -8,7 +8,7 @@ init() ->
     w_server:start(), %Do this in a supervision tree instead!
 
     Frame = w:new_frame("Whatchamacallit Form", [{size, {300, 400}}]),
-    Panel = w:add_panel(Frame),
+    Panel = w:new_panel(Frame),
     HBox = w:new_column_sizer(),
     ButtonBox = w:new_row_sizer(),
     FlexGridSizer = w:new_flexgrid_sizer(5, 2, 9, 25),

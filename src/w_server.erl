@@ -8,7 +8,7 @@
 -export([init/1, terminate/2,  code_change/3, handle_info/2, handle_cast/2, handle_call/3, handle_event/2]).
 
 % Exports for convenience
--export([add_panel/2, build_toolbar/5]).
+-export([new_panel/2, build_toolbar/5]).
 
 -include_lib("w.hrl").
 -include_lib("wx/include/wx.hrl").
@@ -33,12 +33,13 @@ init([RepoModule]) ->
 % Terminate the process loop when the window closes (via the close button X in the top corner).
 handle_event(Msg = #wx{id=ControlId, event=#wxClose{}}, State) -> 
     io:format("*** wxClose. ~p~n   STATE: ~p~n", [Msg, State]),
+    ControlRecord = get_control(ControlId),
     % Simulate closing the window. This allows the client PID to access state as long as needed.
     % When the client PID exits, we'll destroy the WX state for real.
-    WxControl = get_control(ControlId),
+    WxControl = wx_control_of(ControlRecord),
     wxWindow:hide(WxControl), 
     % Send callback so the GUI can cleanup get state of window controls:
-    ClientPid = get_owner_pid(ControlId),
+    ClientPid = owner_of(ControlRecord),
     ClientPid ! {closing, {frame, ControlId}},
     {noreply, State};
 handle_event(Msg = #wx{id=?wxID_EXIT}, State) -> 
@@ -49,16 +50,18 @@ handle_event(Msg = #wx{id=?wxID_EXIT}, State) ->
 % Handle menu & toolbar click events:
 handle_event(Msg = #wx{id=ControlId, event=#wxCommand{ type=command_menu_selected }}, State) -> 
     io:format("wxCommand menu click. ~p ~p~n", [self(), Msg]),
-    ClientPid = get_owner_pid(ControlId),
-    {_WxControl, Text} = get_control(ControlId),
+    ControlRecord = get_control(ControlId),
+    ClientPid = owner_of(ControlRecord),
+    Text = text_of(ControlRecord),
     io:format("   sending callback to client ~p~n", [ClientPid]),
     ClientPid ! {click, {button, ControlId, Text}},
     {noreply, State};
 % Handle regular button click events:
 handle_event(Msg = #wx{id=ButtonId, event=#wxCommand{type = command_button_clicked}}, State) ->
     io:format("wxCommand button click. ~p ~p~n", [self(), Msg]),
-    ClientPid = get_owner_pid(ButtonId),
-    {_WxButton, Text} = get_control(ButtonId),
+    ControlRecord = get_control(ButtonId),
+    ClientPid = owner_of(ControlRecord),
+    Text = text_of(ControlRecord),    
     io:format("   sending callback to client ~p~n", [ClientPid]),
     ClientPid ! {click, {button, ButtonId, Text}},  %TODO: differentiate between toolbar & regular buttons?
     {noreply, State};
@@ -69,7 +72,7 @@ handle_event(_Msg, State) -> {noreply, State}.
 %------------------------------------------------------------------
 handle_call({new_frame, Title, Options}, From, State) ->
     {Id, WxFrame} = new_window(Title, Options), %TODO: options
-    set_control(From, Id, WxFrame),
+    set_control(to_record(From, Id, frame, WxFrame)),
     {ClientPid, _} = From,
     % This can cause multiple DOWN messages to be sent. Can we prevent that from happening?
     erlang:monitor(process, ClientPid),
@@ -80,24 +83,24 @@ handle_call({show, {frame, FrameId}}, _From, State) ->
 
 % Panel
 %------------------------------------------------------------------
-handle_call({add_panel, FrameId, Options}, From, State) ->
-    {Id, WxPanel} = load_control_and_run(FrameId, ?MODULE, add_panel, [Options]),
-    set_control(From, Id, WxPanel),
+handle_call({new_panel, FrameId, Options}, From, State) ->
+    {Id, WxPanel} = load_control_and_run(FrameId, ?MODULE, new_panel, [Options]),
+    set_control(to_record(From, Id, panel, WxPanel)),
     {reply, {panel, Id}, State};
 
 handle_call({set_sizer, PanelId, SizerId}, _From, State) ->
-    WxPanel = get_control(PanelId),
-    WxSizer = get_control(SizerId),
+    WxPanel = get_wx_control(PanelId),
+    WxSizer = get_wx_control(SizerId),
     wxPanel:setSizer(WxPanel, WxSizer),
     {reply, ok, State};
 
 % Label
 %------------------------------------------------------------------
 handle_call({new_label, PanelId, Text}, From, State) ->
-    WxPanel = get_control(PanelId),
+    WxPanel = get_wx_control(PanelId),
     Id = next_id(),
     WxControl = wxStaticText:new(WxPanel, Id, Text),
-    set_control(From, Id, WxControl),
+    set_control(to_record(From, Id, label, WxControl, Text)),
     {reply, {label, Id}, State};
 
 % Statusbar
@@ -119,9 +122,9 @@ handle_call({add_toolbar, FrameId, Def, W, H}, From, State) ->
 % Boxsizer
 %------------------------------------------------------------------
 handle_call({new_box_sizer, Orientation}, From, State) ->
-    Sizer = wxBoxSizer:new(Orientation),
+    WxSizer = wxBoxSizer:new(Orientation),
     Id = next_id(),
-    set_control(From, Id, Sizer),
+    set_control(to_record(From, Id, box_sizer, WxSizer)),
     {reply, {box_sizer, Id}, State};
 
 handle_call({set_min_size, SizerId, Width, Height}, _From, State) ->
@@ -129,11 +132,8 @@ handle_call({set_min_size, SizerId, Width, Height}, _From, State) ->
     {reply, ok, State};
 
 handle_call({append_child, ParentId, ChildId, Flags}, _From, State) ->
-    WxParent = get_control(ParentId),
-    WxChild = case get_control(ChildId) of  % TODO: RECORD... this is getting silly.
-        {WxRef, _Text} -> WxRef;
-        WxRef -> WxRef
-    end,
+    WxParent = get_wx_control(ParentId),
+    WxChild = get_wx_control(ChildId),
     wxSizer:add(WxParent, WxChild, Flags),
     {reply, ok, State};
 
@@ -144,27 +144,27 @@ handle_call({append_spacer, SizerId, Amount}, _From, State) ->
 % Gridsizer
 %------------------------------------------------------------------
 handle_call({new_grid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding}, From, State) ->
-    Sizer = wxGridSizer:new(Rows, Columns, VerticlePadding, HorizontalPadding),
+    WxSizer = wxGridSizer:new(Rows, Columns, VerticlePadding, HorizontalPadding),
     Id = next_id(),
-    set_control(From, Id, Sizer),
+    set_control(to_record(From, Id, grid_sizer, WxSizer)),
     {reply, {grid_sizer, Id}, State};
 
 handle_call({fill_grid_sizer, GsId, Controls}, _From, State) ->
-    Sizer = get_control(GsId),
-    fill_grid_sizer(Sizer, Controls),
+    WxSizer = get_wx_control(GsId),
+    fill_grid_sizer(WxSizer, Controls),
     {reply, ok, State};
 
 % FlexGrid sizer
 %------------------------------------------------------------------
 handle_call({new_flexgrid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding}, From, State) ->
-    Sizer = wxFlexGridSizer:new(Rows, Columns, VerticlePadding, HorizontalPadding),
+    WxSizer = wxFlexGridSizer:new(Rows, Columns, VerticlePadding, HorizontalPadding),
     Id = next_id(),
-    set_control(From, Id, Sizer),
+    set_control(to_record(From, Id, flexgrid_sizer, WxSizer)),
     {reply, {flexgrid_sizer, Id}, State};
 
 handle_call({fill_flexgrid_sizer, GsId, Controls}, _From, State) ->
-    Sizer = get_control(GsId),
-    fill_grid_sizer(Sizer, Controls),
+    WxSizer = get_wx_control(GsId),
+    fill_grid_sizer(WxSizer, Controls),
     {reply, ok, State};
 
 handle_call({expand_row, Id, Index, Proportion}, _From, State) ->
@@ -177,8 +177,8 @@ handle_call({expand_col, Id, Index, Proportion}, _From, State) ->
 % Buttons
 %------------------------------------------------------------------
 handle_call({new_button, PanelId, Text}, From, State) ->
-    Panel = get_control(PanelId),
-    Button = new_button(Panel, From, Text),
+    WxPanel = get_wx_control(PanelId),
+    Button = new_button(WxPanel, From, Text),
     {reply, Button, State};
 
 
@@ -186,8 +186,8 @@ handle_call({new_button, PanelId, Text}, From, State) ->
 %------------------------------------------------------------------
 handle_call({new_textbox, PanelId, Options}, From, State) ->
     Id = next_id(),
-    Textbox = load_control_and_run(PanelId, wxTextCtrl, new, [Id, Options]),
-    set_control(From, Id, Textbox),
+    WxTextbox = load_control_and_run(PanelId, wxTextCtrl, new, [Id, Options]),
+    set_control(to_record(From, Id, textbox, WxTextbox)),
     {reply, {textbox, Id}, State};
 
 % Textbox manipulation functions
@@ -209,8 +209,8 @@ handle_call({clear, TextboxId}, _From, State) ->
 %------------------------------------------------------------------
 handle_call({new_listbox, PanelId}, From, State) ->
     Id = next_id(),
-    Listbox = load_control_and_run(PanelId, wxListBox, new, [Id, [{size, {-1,50}}]]), % TODO: size needs to be an option!
-    set_control(From, Id, Listbox),
+    WxListbox = load_control_and_run(PanelId, wxListBox, new, [Id, [{size, {-1,50}}]]), % TODO: size needs to be an option!
+    set_control(to_record(From, Id, listbox, WxListbox)),
     {reply, {listbox, Id}, State};
 
 % Listbox manipulation functions
@@ -247,15 +247,15 @@ new_window(Title, Options) ->
     wxFrame:connect(WxFrame, command_button_clicked), %Regular button commands
     {Id, WxFrame}.
 
-add_panel(WxFrame, []) -> {next_id(), wxPanel:new(WxFrame)};
-add_panel(WxFrame, Options) -> {next_id(), wxPanel:new(WxFrame, Options)}.
+new_panel(WxFrame, []) -> {next_id(), wxPanel:new(WxFrame)};
+new_panel(WxFrame, Options) -> {next_id(), wxPanel:new(WxFrame, Options)}.
 
 % Load a wxControl by id, then invoke the given Fun with the wxControl as the first or only argument.
 % EG:   load_control_and_run(ControlId, wxFrame, setStatusText, [Text]) invokes
 %       wxFrame:setStatusText(TheWxFrameObject, Text)
 load_control_and_run(ControlId, Mod, Fun) -> load_control_and_run(ControlId, Mod, Fun, []).
 load_control_and_run(ControlId, Mod, Fun, ExtraArgs) ->
-    WxControl = get_control(ControlId), % TODO: what to do if control is not found?
+    WxControl = get_wx_control(ControlId), % TODO: what to do if control is not found?
     erlang:apply(Mod, Fun, [WxControl|ExtraArgs]).
 
 build_toolbar(WxFrame, From, Def, W, H) ->
@@ -270,7 +270,7 @@ new_toolbar_button(Toolbar, From, {Title, IconName}, W, H) ->
     Icon = get_bitmap(IconName, W, H),    
     Id = next_id(),    
     WxButton = wxToolBar:addTool(Toolbar, Id, Title, Icon, [{shortHelp, Title}]),
-    set_control(From, Id, {WxButton, Title}),
+    set_control(to_record(From, Id, button, WxButton, Title)),
     {Id, WxButton, Title};
 new_toolbar_button(Toolbar, From, {Title, IconName, LongHelp}, W, H) ->
     {Id, WxButton, Title} = new_toolbar_button(Toolbar, From, {Title, IconName}, W, H),
@@ -289,57 +289,61 @@ add_to_grid_sizer(Sizer, blank) ->
     wxSizer:addSpacer(Sizer, 0),
     blank;
 add_to_grid_sizer(Sizer, {label, Id}) ->
-    WxControl = get_control(Id),
+    WxControl = get_wx_control(Id),
     wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: need to handle proportion too.
 add_to_grid_sizer(Sizer, {textbox, Id}) ->
-    WxControl = get_control(Id),
+    WxControl = get_wx_control(Id),
     wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: does it make sense to have this as a default?
 
 add_to_grid_sizer(Sizer, {listbox, Id}) ->
-    WxControl = get_control(Id),
+    WxControl = get_wx_control(Id),
     wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: options??
 
 add_to_grid_sizer(Sizer, {button, Id, _Text}) ->
-    {WxButton, _Text} = get_control(Id),
+    WxButton = get_wx_control(Id),
     wxSizer:add(Sizer, WxButton, [{proportion, 0}, {flag, ?wxEXPAND}]); % TODO: options!
 
 add_to_grid_sizer(Sizer, {box_sizer, Id}) ->
-    WxChildSizer = get_control(Id),
+    WxChildSizer = get_wx_control(Id),
     wxSizer:add(Sizer, WxChildSizer, []). % TODO: options
 
 
 new_button(WxPanel, From, Text) ->
     Id = next_id(),
     WxButton = wxButton:new(WxPanel, Id, [{label, Text}]),
-    set_control(From, Id, {WxButton, Text}),
+    set_control(to_record(From, Id, button, WxButton, Text)),
     {button, Id, Text}.
 
 
 cleanup_all_controls(ClientPid) ->
-    Controls = get_controls_by_owner_pid(ClientPid),
-    cleanup(Controls).
+    ControlRecords = get_controls_by_owner_pid(ClientPid),
+    % It's not clear WHY, but we seem to have to delete the parent controls before their children to avoid strange
+    % errors from the C library that underpins the WX stuff.
+    SortedControlRecords = sort_controls_by_id(ControlRecords),
+    cleanup(SortedControlRecords).
 
 cleanup([]) -> ok;
-cleanup([{Id, _Pid, WxControl}|T]) ->
-    io:format(" deleting control ~p ~p~n", [Id, WxControl]),
-    % WxWindow is the base class for most controls, but not invisible things like sizers.
-    % TODO: test. This may fail for sizers and other controls. We are probably going
-    % to have to refactor the storage record into something that keeps track of our handle
-    % type so that we can destroy things correctly.
-    try wxWindow:destroy(WxControl) 
-    catch _:_ ->
-        try wxBoxSizer:destroy(WxControl) catch _:_ -> io:format("*** wxSizer:destroy failed for control ~p~n", [WxControl]) end
-    end,
-    remove_control(Id),
+cleanup([ControlRecord|T]) ->
+    io:format(" deleting control ~p ~p ~p~n", [id_of(ControlRecord), type_of(ControlRecord), wx_control_of(ControlRecord)]),
+    destroy_wx_control(ControlRecord),
+    remove_control(id_of(ControlRecord)),
     cleanup(T).
 
+sort_controls_by_id(Controls) when is_list(Controls) ->
+    lists:sort(fun(A,B) -> A#control.id =< B#control.id end, Controls).
 
-% TODO: refactor the REPO stuff to use a record
-% TODO: we're going to have to store the w type (eg: frame, panel, textbox, etc.)
-%  so that we can figure out what kind of a thing each control instance is without
-%  just assuming the type based on the context of the current request.
-
-
+% WxWindow is the base class for most controls, but not invisible things like sizers.
+destroy_wx_control(#control{type=box_sizer, wx_control=WxControl} = Control) when is_record(Control, control) ->
+    % ERL docs don't show a destroy() function for wxSizer: http://www.erlang.org/doc/man/wxSizer.html
+    wxBoxSizer:destroy(WxControl);
+destroy_wx_control(#control{type=grid_sizer, wx_control=WxControl} = Control) when is_record(Control, control) ->
+    wxFlexGridSizer:destroy(WxControl);
+destroy_wx_control(#control{type=flexgrid_sizer, wx_control=WxControl} = Control) when is_record(Control, control) ->
+    wxGridSizer:destroy(WxControl);
+destroy_wx_control(#control{type=button, wx_control=WxControl} = Control) when is_record(Control, control) ->
+    wxButton:destroy(WxControl);
+destroy_wx_control(#control{wx_control=WxControl} = Control) when is_record(Control, control) ->
+    wxWindow:destroy(WxControl).
 
 % Record Manipulation
 %------------------------------------------------------------------
@@ -349,8 +353,8 @@ text_of(R) when is_record(R, control) -> R#control.text.
 owner_of(R) when is_record(R, control) -> R#control.owner_pid.
 wx_control_of(R) when is_record(R, control) -> R#control.wx_control.
 
-to_record(Id, Type) -> #control{id=Id, type=Type}.
-to_record(Id, Type, Text) -> #control{id=Id, type=Type, text=Text}.
+to_record({OwnerPid, _}, Id, Type, WxControl) -> #control{owner_pid=OwnerPid, id=Id, type=Type, wx_control=WxControl}.
+to_record({OwnerPid, _}, Id, Type, WxControl, Text) -> #control{owner_pid=OwnerPid, id=Id, type=Type, wx_control=WxControl, text=Text}.
 
 % Wrapper around the repo:
 %------------------------------------------------------------------
@@ -362,19 +366,18 @@ next_id() -> (repo()):next_id().
 get_wx_server() -> (repo()):get_wx_server().
 set_wx_server(Server) -> (repo()):set_wx_server(Server).
 
-get_owner_pid(ControlId) ->
-    {ok, {ControlId, OwnerPid, _WxControl}} = (repo()):get_control(ControlId),
-    OwnerPid.
 get_control(ControlId) ->
-    {ok, {ControlId, _OwnerPid, WxControl}} = (repo()):get_control(ControlId),
-    WxControl.
-set_control({ClientPid, _}, ControlId, Control) ->
-    (repo()):set_control(ControlId, ClientPid, Control).
+    {ok, ControlRecord} = (repo()):get_control(ControlId),
+    ControlRecord.
+get_wx_control(ControlId) ->
+    {ok, ControlRecord} = (repo()):get_control(ControlId),
+    wx_control_of(ControlRecord).
+set_control(ControlRecord) when is_record(ControlRecord, control) ->
+    (repo()):set_control(id_of(ControlRecord), ControlRecord).
 remove_control(ControlId) ->
     ok = (repo()):remove_control(ControlId).
 get_controls_by_owner_pid(OwnerPid) ->
     (repo()):get_controls_by_owner_pid(OwnerPid).
-
 
 %------------------------------------------------------------------
 % Unit tests: Move these into a separate module
@@ -382,13 +385,17 @@ get_controls_by_owner_pid(OwnerPid) ->
 -include_lib("eunit/include/eunit.hrl").
 
 to_record_test() ->
-    R1 = to_record(999, textbox),
+    R1 = to_record({self(), nothing}, 999, textbox, not_a_real_wx_control),
+    ?assertEqual(self(), owner_of(R1)),
     ?assertEqual(999, id_of(R1)),
     ?assertEqual(textbox, type_of(R1)),
-    R2 = to_record(1000, listbox, "Some Text"),
+    ?assertEqual(not_a_real_wx_control, wx_control_of(R1)),
+    R2 = to_record({self(), nothing}, 1000, listbox, not_a_real_wx_control, "Some Text"),
+    ?assertEqual(self(), owner_of(R2)),
     ?assertEqual(1000, id_of(R2)),
     ?assertEqual(listbox, type_of(R2)),
-    ?assertEqual("Some Text", text_of(R2)).
+    ?assertEqual("Some Text", text_of(R2)),
+    ?assertEqual(not_a_real_wx_control, wx_control_of(R2)).
 
 simple_record_test() ->
     R = #control{id=999, type=button, owner_pid=self(), text="Fake Button", wx_control={test}},

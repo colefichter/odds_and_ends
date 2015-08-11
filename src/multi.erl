@@ -11,7 +11,7 @@ init() ->
 
 make_window(Title) ->
     Frame = w:new_frame(Title, [{size, {100, 150}}]),
-    Panel = w:add_panel(Frame),
+    Panel = w:new_panel(Frame),
     Textbox = w:new_textbox(Panel, Title), % Add it to the panel?
     w:show(Frame),
     {Frame, Textbox}.

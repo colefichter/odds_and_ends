@@ -10,7 +10,7 @@ init() ->
     w_server:start(), %Do this in a supervision tree instead!
     
     Frame = w:new_frame("Whatchamacallit Calculator!", [{size, {350, 200}}]),
-    Panel = w:add_panel(Frame),
+    Panel = w:new_panel(Frame),
     Sizer = w:new_column_sizer(), % for the whole window
     GS = w:new_grid_sizer(5, 4, 3, 3), % for the buttons
 
