@@ -42,12 +42,14 @@ handle_event(Msg = #wx{id=ControlId, event=#wxClose{}}, State) ->
     ClientPid = owner_of(ControlRecord),
     ClientPid ! {closing, {frame, ControlId}},
     {noreply, State};
-handle_event(Msg = #wx{id=?wxID_EXIT}, State) -> 
-    % TODO: this is wrong. Cleanup state (which is not in State).
-    io:format("*** wxID_EXIT. ~p~n   STATE: ~p~n", [Msg, State]),
-    wxWindow:destroy(State),
-    {noreply, State};
+
+% handle_event(Msg = #wx{id=?wxID_EXIT}, State) -> 
+%     % TODO: this is wrong. Cleanup state (which is not in State).
+%     io:format("*** wxID_EXIT. ~p~n   STATE: ~p~n", [Msg, State]),
+%     wxWindow:destroy(State),
+%     {noreply, State};
 % Handle menu & toolbar click events:
+
 handle_event(Msg = #wx{id=ControlId, event=#wxCommand{ type=command_menu_selected }}, State) -> 
     io:format("wxCommand menu click. ~p ~p~n", [self(), Msg]),
     ControlRecord = get_control(ControlId),
@@ -190,19 +192,22 @@ handle_call({new_textbox, PanelId, Options}, From, State) ->
     set_control(to_record(From, Id, textbox, WxTextbox)),
     {reply, {textbox, Id}, State};
 
-% Textbox manipulation functions
+% Text manipulation functions for: Label, Textbox
 %------------------------------------------------------------------
-handle_call({append_text, TextboxId, Text}, _From, State) ->
-    load_control_and_run(TextboxId, wxTextCtrl, appendText, [Text]),
+handle_call({append_text, ControlId, Text}, _From, State) ->    
+    %load_control_and_run(TextboxId, wxTextCtrl, appendText, [Text]),
+    append_text(ControlId, Text),
     {reply, ok, State};
-handle_call({get_text, TextboxId}, _From, State) ->
-    Text = load_control_and_run(TextboxId, wxTextCtrl, getValue),
+handle_call({get_text, ControlId}, _From, State) ->
+    %Text = load_control_and_run(TextboxId, wxTextCtrl, getValue),
+    Text = get_text(ControlId),
     {reply, Text, State};
-handle_call({set_text, TextboxId, Text}, _From, State) ->
-    load_control_and_run(TextboxId, wxTextCtrl, setValue, [Text]),
+handle_call({set_text, ControlId, Text}, _From, State) -> 
+    set_text(ControlId, Text),
     {reply, ok, State};
-handle_call({clear, TextboxId}, _From, State) ->
-    load_control_and_run(TextboxId, wxTextCtrl, clear),
+handle_call({clear, ControlId}, _From, State) ->
+    %load_control_and_run(TextboxId, wxTextCtrl, clear),
+    clear_text(ControlId),
     {reply, ok, State};
 
 % Listbox constructors
@@ -282,6 +287,40 @@ get_bitmap(Name, W, H) -> wxArtProvider:getBitmap(Name, [{size, {W, H}}]).
 fill_grid_sizer(Sizer, Def) ->
     Controls = [add_to_grid_sizer(Sizer, X) || X <- Def],
     Controls.
+
+
+% Text manipulation helpers
+%------------------------------------------------------------------
+get_text(ControlId) when is_integer(ControlId) ->
+    Control = get_control(ControlId),
+    get_text(Control, type_of(Control)).
+
+get_text(Control, textbox) -> wxTextCtrl:getValue(wx_control_of(Control));
+get_text(Control, label) -> wxStaticText:getLabel(wx_control_of(Control)).
+
+set_text(ControlId, Text) when is_integer(ControlId) ->
+    Control = get_control(ControlId),
+    set_text(Control, type_of(Control), Text).
+
+set_text(Control, textbox, Text) -> wxTextCtrl:setValue(wx_control_of(Control), Text);
+set_text(Control, label, Text) -> wxStaticText:setLabel(wx_control_of(Control), Text).
+
+clear_text(ControlId) when is_integer(ControlId) ->
+    Control = get_control(ControlId),
+    clear_text(Control, type_of(Control)).
+
+clear_text(Control, textbox) -> wxTextCtrl:clear(wx_control_of(Control));
+clear_text(Control, label) -> wxStaticText:setLabel(wx_control_of(Control), "").
+
+append_text(ControlId, Text) ->
+    Control = get_control(ControlId),
+    append_text(Control, type_of(Control), Text).
+
+append_text(Control, textbox, Text) -> wxTextCtrl:appendText(wx_control_of(Control), Text);
+append_text(Control, label, Text) ->
+    WxControl = wx_control_of(Control),
+    CurrentText = wxStaticText:getLabel(WxControl),
+    wxStaticText:setLabel(WxControl, CurrentText ++ Text).
 
 
 % TODO: pull options out. Refactor and conbine similar clauses.

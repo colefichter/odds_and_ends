@@ -72,16 +72,16 @@ show({frame, FrameId}) -> wx_object:call(?SERVER, {show, {frame, FrameId}}).
 new_panel({frame, FrameId}) -> new_panel({frame, FrameId}, []).
 new_panel({frame, FrameId}, Options) -> wx_object:call(?SERVER, {new_panel, FrameId, Options}).
 
+-spec set_sizer(panel_handle(), sizer_handle()) -> ok.
 set_sizer({panel, PanelId}, {box_sizer, SizerId}) -> 
     wx_object:call(?SERVER, {set_sizer, PanelId, SizerId}).
-
 
 % Label
 %------------------------------------------------------------------
 -spec new_label(panel_handle(), string()) -> label_handle().
 new_label({panel, PanelId}, Text) -> wx_object:call(?SERVER, {new_label, PanelId, Text}).
 
-% TODO: get_text? set_text?
+% See text manipulation section below, for get_text, set_text, append_text, clear.
 
 % Statusbar
 %------------------------------------------------------------------
@@ -206,21 +206,24 @@ new_textbox({panel, PanelId}, Text, Options) ->
     Options2 = to_wx_style([{value, Text}|Options]),
     wx_object:call(?SERVER, {new_textbox, PanelId, Options2}).
 
-% Textbox manipulation functions
+% Text manipulation functions for: Labels, Textboxes.
 %------------------------------------------------------------------
--spec append_text(textbox_handle(), string()) -> ok.
-append_text({textbox, TextboxId}, Text) -> wx_object:call(?SERVER, {append_text, TextboxId, Text}).
+-spec append_text(textbox_handle() | label_handle(), string()) -> ok.
+append_text({textbox, TextboxId}, Text) -> wx_object:call(?SERVER, {append_text, TextboxId, Text});
+append_text({label, LabelId}, Text) -> wx_object:call(?SERVER, {append_text, LabelId, Text}).
 
--spec get_text(textbox_handle()) -> string().
-get_text({textbox, TextboxId}) -> wx_object:call(?SERVER, {get_text, TextboxId}).
+-spec get_text(textbox_handle() | label_handle()) -> string().
+get_text({textbox, TextboxId}) -> wx_object:call(?SERVER, {get_text, TextboxId});
+get_text({label, LabelId}) -> wx_object:call(?SERVER, {get_text, LabelId}).
 
--spec set_text(textbox_handle(), string()) -> ok.
-set_text({textbox, TextboxId}, Text) -> wx_object:call(?SERVER, {set_text, TextboxId, Text}).
+-spec set_text(textbox_handle() | label_handle(), string()) -> ok.
+% -spec set_text(label_handle(), string()) -> ok.
+set_text({textbox, TextboxId}, Text) -> wx_object:call(?SERVER, {set_text, TextboxId, Text});
+set_text({label, LabelId}, Text) -> wx_object:call(?SERVER, {set_text, LabelId, Text}).
 
--spec clear(textbox_handle()) -> ok.
-clear({textbox, TextboxId}) -> wx_object:call(?SERVER, {clear, TextboxId}).
-
-
+-spec clear(textbox_handle() | label_handle()) -> ok.
+clear({textbox, TextboxId}) -> wx_object:call(?SERVER, {clear, TextboxId});
+clear({label, LabelId}) -> wx_object:call(?SERVER, {clear, LabelId}).
 
 
 % Listbox constructors
@@ -399,5 +402,20 @@ listbox_test() ->
     Listbox = w:new_listbox(Panel),
     bind_values_to_controls([Listbox], [Genres]),
     ok = w_server:stop().
+
+label_test() ->
+    w_server:start(),
+    Frame = w:new_frame("Listbox tests!"),
+    Panel = w:new_panel(Frame),
+    L1 = w:new_label(Panel, "Label One"),
+    ?assertEqual("Label One", w:get_text(L1)),
+    ok = w:set_text(L1, "New Text"),
+    ?assertEqual("New Text", w:get_text(L1)),
+    ok = w:append_text(L1, " More"),
+    ?assertEqual("New Text More", w:get_text(L1)),
+    ok = w:clear(L1),
+    ?assertEqual("", w:get_text(L1)),
+    ok = w_server:stop().
+
 
 % TODO: WRITE LOTS AND LOTS OF UNIT TESTS!
