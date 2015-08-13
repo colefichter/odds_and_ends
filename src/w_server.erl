@@ -118,8 +118,7 @@ handle_call({set_status, FrameId, Text}, _From, State) ->
 %------------------------------------------------------------------
 handle_call({add_toolbar, FrameId, Def, W, H}, From, State) ->
     Buttons = load_control_and_run(FrameId, ?MODULE, build_toolbar, [From, Def, W, H]),
-    Buttons2 = [{button, Id, Title} || {Id, _WxButton, Title} <- Buttons],
-    {reply, Buttons2, State};
+    {reply, Buttons, State};
 
 % Boxsizer
 %------------------------------------------------------------------
@@ -151,11 +150,6 @@ handle_call({new_grid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding},
     set_control(to_record(From, Id, grid_sizer, WxSizer)),
     {reply, {grid_sizer, Id}, State};
 
-handle_call({fill_grid_sizer, GsId, Controls}, _From, State) ->
-    WxSizer = get_wx_control(GsId),
-    fill_grid_sizer(WxSizer, Controls),
-    {reply, ok, State};
-
 % FlexGrid sizer
 %------------------------------------------------------------------
 handle_call({new_flexgrid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding}, From, State) ->
@@ -164,16 +158,23 @@ handle_call({new_flexgrid_sizer, Rows, Columns, VerticlePadding, HorizontalPaddi
     set_control(to_record(From, Id, flexgrid_sizer, WxSizer)),
     {reply, {flexgrid_sizer, Id}, State};
 
-handle_call({fill_flexgrid_sizer, GsId, Controls}, _From, State) ->
-    WxSizer = get_wx_control(GsId),
-    fill_grid_sizer(WxSizer, Controls),
-    {reply, ok, State};
+% handle_call({fill_flexgrid_sizer, GsId, Controls}, _From, State) ->
+%     WxSizer = get_wx_control(GsId),
+%     fill_grid_sizer(WxSizer, Controls),
+%     {reply, ok, State};
 
 handle_call({expand_row, Id, Index, Proportion}, _From, State) ->
     load_control_and_run(Id, wxFlexGridSizer, addGrowableRow, [Index, [{proportion, Proportion}]]),
     {reply, ok, State};
 handle_call({expand_col, Id, Index, Proportion}, _From, State) ->
     load_control_and_run(Id, wxFlexGridSizer, addGrowableCol, [Index, [{proportion, Proportion}]]),
+    {reply, ok, State};
+
+% Population of Grid Sizer and FlexGrid Sizer:
+%------------------------------------------------------------------
+handle_call({fill_grid_sizer, GsId, Controls}, _From, State) ->
+    WxSizer = get_wx_control(GsId),
+    fill_grid_sizer(WxSizer, Controls),
     {reply, ok, State};
 
 % Buttons
@@ -276,11 +277,11 @@ new_toolbar_button(Toolbar, From, {Title, IconName}, W, H) ->
     Id = next_id(),    
     WxButton = wxToolBar:addTool(Toolbar, Id, Title, Icon, [{shortHelp, Title}]),
     set_control(to_record(From, Id, button, WxButton, Title)),
-    {Id, WxButton, Title};
+    {button, Id, Title};
 new_toolbar_button(Toolbar, From, {Title, IconName, LongHelp}, W, H) ->
-    {Id, WxButton, Title} = new_toolbar_button(Toolbar, From, {Title, IconName}, W, H),
+    Button = {button, Id, Title} = new_toolbar_button(Toolbar, From, {Title, IconName}, W, H),
     wxToolBar:setToolLongHelp(Toolbar, Id, LongHelp),
-    {Id, WxButton, Title}.
+    Button.
 
 get_bitmap(Name, W, H) -> wxArtProvider:getBitmap(Name, [{size, {W, H}}]).
 
@@ -324,28 +325,23 @@ append_text(Control, label, Text) ->
 
 
 % TODO: pull options out. Refactor and conbine similar clauses.
-add_to_grid_sizer(Sizer, blank) ->
-    wxSizer:addSpacer(Sizer, 0),
-    blank;
+add_to_grid_sizer(Sizer, blank) -> 
+    wxSizer:addSpacer(Sizer, 0);
 add_to_grid_sizer(Sizer, {label, Id}) ->
     WxControl = get_wx_control(Id),
     wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: need to handle proportion too.
 add_to_grid_sizer(Sizer, {textbox, Id}) ->
     WxControl = get_wx_control(Id),
     wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: does it make sense to have this as a default?
-
 add_to_grid_sizer(Sizer, {listbox, Id}) ->
     WxControl = get_wx_control(Id),
     wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: options??
-
 add_to_grid_sizer(Sizer, {button, Id, _Text}) ->
     WxButton = get_wx_control(Id),
     wxSizer:add(Sizer, WxButton, [{proportion, 0}, {flag, ?wxEXPAND}]); % TODO: options!
-
 add_to_grid_sizer(Sizer, {box_sizer, Id}) ->
     WxChildSizer = get_wx_control(Id),
     wxSizer:add(Sizer, WxChildSizer, []). % TODO: options
-
 
 new_button(WxPanel, From, Text) ->
     Id = next_id(),

@@ -12,14 +12,20 @@
 % Return types for this API:
 -type frame_handle() :: {frame, integer()}.
 -type panel_handle() :: {panel, integer()}.
--type label_handle() :: {label, integer()}.
+-type button_handle() :: {button, integer(), string()}.
 -type toolbar_button_handle() :: {button, integer(), string()}.
+-type label_handle() :: {label, integer()}.
+-type textbox_handle() :: {textbox, integer()}.
+-type listbox_handle() :: {listbox, integer()}.
 -type sizer_handle() :: {box_sizer, integer()}.
 -type grid_sizer_handle() :: {grid_sizer, integer()}.
 -type flexgrid_sizer_handle() :: {flexgrid_sizer, integer()}.
--type textbox_handle() :: {textbox, integer()}.
 -type control_handle() :: blank
-                        | {button, integer(), string()}.
+                        | button_handle()
+                        | toolbar_button_handle()
+                        | label_handle()
+                        | textbox_handle()
+                        | listbox_handle().
 
 % Reusable types for common options:
 -type opt_pos() :: {pos, {integer(), integer()}}.
@@ -29,31 +35,32 @@
 % Types for the various Options list arguments.
 -type frame_options() :: [frame_option()].
 -type frame_option() :: opt_pos()
-                     |  opt_size()
-                     |  opt_style().
+                      |  opt_size()
+                      |  opt_style().
 
 -type panel_options() :: [panel_option()].
 -type panel_option() :: {winid, integer()} % TODO: do we need this option?
-                     |  opt_pos()
-                     |  opt_size()
-                     |  opt_style().
+                      |  opt_pos()
+                      |  opt_size()
+                      |  opt_style().
 
 -type textbox_options() :: [textbox_option()].
 -type textbox_option() :: opt_pos()
                         | opt_size().
                             %TODO: style and validators! http://www.erlang.org/doc/man/wxTextCtrl.html#new-3
 
+% Input types for arguments to builders:
 -type toolbar_def() :: [toolbar_button_def()].
 -type toolbar_button_def() :: {string(), string()}
                             | {string(), string(), string()}.
 
 -type control_list_def() :: [control_def()].
 -type control_def() :: blank
-                     %| {button, integer(), string()}
                      | {button, string()}
                      | {textbox, string()}
                      | {textbox, string(), textbox_options()}
-                     | {label, string()}.
+                     | {label, string()}
+                     | {listbox}.
 
 % Frame
 %------------------------------------------------------------------
@@ -113,26 +120,20 @@ new_column_sizer() -> wx_object:call(?SERVER, {new_box_sizer, ?wxVERTICAL}).
 -spec new_row_sizer() -> sizer_handle().
 new_row_sizer() -> wx_object:call(?SERVER, {new_box_sizer, ?wxHORIZONTAL}).
 
-set_min_size({box_sizer, SizerId}, Width, Height) -> 
-    wx_object:call(?SERVER, {set_min_size, SizerId, Width, Height}).
-
-
+-spec set_min_size(sizer_handle(), integer(), integer()) -> ok.
+set_min_size({box_sizer, SizerId}, Width, Height) -> wx_object:call(?SERVER, {set_min_size, SizerId, Width, Height}).
 
 % TODO: appending spacers and children should work more like filling the grid sizer. See form2 example where the buttons are added.
+append_child({box_sizer, ParentId}, {button, ChildId, _Text}) -> 
+    append_child(ParentId, ChildId, []);
+append_child({box_sizer, ParentId}, {Type, ChildId}) when Type == box_sizer; Type == grid_sizer; Type == flexgrid_sizer; Type == textbox -> 
+    append_child(ParentId, ChildId, []).
 
-append_child({box_sizer, ParentId}, {grid_sizer, ChildId}) -> append_child(ParentId, ChildId, []);
-append_child({box_sizer, ParentId}, {flexgrid_sizer, ChildId}) -> append_child(ParentId, ChildId, []);
-append_child({box_sizer, ParentId}, {textbox, ChildId}) -> append_child(ParentId, ChildId, []);
-append_child({box_sizer, ParentId}, {button, ChildId, _Text}) -> append_child(ParentId, ChildId, []);
-append_child({box_sizer, ParentId}, {box_sizer, ChildId}) -> append_child(ParentId, ChildId, []).
-
-append_child({box_sizer, ParentId}, {grid_sizer, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
-append_child({box_sizer, ParentId}, {flexgrid_sizer, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
-append_child({box_sizer, ParentId}, {textbox, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
-append_child({box_sizer, ParentId}, {button, ChildId, _Text}, Options) -> append_child(ParentId, ChildId, Options);
-append_child({box_sizer, ParentId}, {box_sizer, ChildId}, Options) -> append_child(ParentId, ChildId, Options);
-
-append_child(ParentId, ChildId, Flags) -> 
+append_child({box_sizer, ParentId}, {button, ChildId, _Text}, Options) -> 
+    append_child(ParentId, ChildId, Options);
+append_child({box_sizer, ParentId}, {Type, ChildId}, Options) when Type == box_sizer; Type == grid_sizer; Type == flexgrid_sizer; Type == textbox ->
+    append_child(ParentId, ChildId, Options);
+append_child(ParentId, ChildId, Flags) when is_integer(ParentId), is_integer(ChildId) -> 
     Flags2 = to_wx_flag(Flags),
     wx_object:call(?SERVER, {append_child, ParentId, ChildId, Flags2}).
 
@@ -146,23 +147,12 @@ append_spacer({box_sizer, SizerId}, Amount) -> wx_object:call(?SERVER, {append_s
 new_grid_sizer(Rows, Columns, VerticlePadding, HorizontalPadding) ->
     wx_object:call(?SERVER, {new_grid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding}).
 
--spec fill_grid_sizer(grid_sizer_handle(), control_list_def()) -> ok.
-fill_grid_sizer({grid_sizer, GsId}, Controls) -> wx_object:call(?SERVER, {fill_grid_sizer, GsId, Controls}).
-
-% TODO: how to pass expand option?
-
 % FlexGridsizer
 %------------------------------------------------------------------
 %TODO: add an overload that uses a default padding value?
 -spec new_flexgrid_sizer(integer(), integer(), integer(), integer()) -> flexgrid_sizer_handle().
 new_flexgrid_sizer(Rows, Columns, VerticlePadding, HorizontalPadding) ->
     wx_object:call(?SERVER, {new_flexgrid_sizer, Rows, Columns, VerticlePadding, HorizontalPadding}).
-
--spec fill_flexgrid_sizer(flexgrid_sizer_handle(), control_list_def()) -> ok.
-fill_flexgrid_sizer({flexgrid_sizer, Id}, Controls) -> wx_object:call(?SERVER, {fill_flexgrid_sizer, Id, Controls}).
-
-% TODO: combine with fill_grid_sizer
-% TODO: how to pass expand option?
 
 %NOTE: these Index parameters are zero-based to match the C++ indices!
 expand_row(Handle = {flexgrid_sizer, _Id}, Index) -> expand_row(Handle, Index, 1).
@@ -173,23 +163,27 @@ expand_row({flexgrid_sizer, Id}, Index, Proportion) ->
 expand_col(Handle = {flexgrid_sizer, _Id}, Index) -> expand_col(Handle, Index, 1).
 expand_col({flexgrid_sizer, Id}, Index, Proportion) -> wx_object:call(?SERVER, {expand_col, Id, Index, Proportion}).
 
+% Population of Grid Sizer and FlexGrid Sizer:
+%------------------------------------------------------------------
+-spec fill_grid_sizer(grid_sizer_handle() | flexgrid_sizer_handle(), control_list_def()) -> ok.
+fill_grid_sizer({Type, Id}, Controls) when Type == grid_sizer; Type == flexgrid_sizer -> wx_object:call(?SERVER, {fill_grid_sizer, Id, Controls}).
+% TODO: how to pass expand option?
+
+
 % Buttons
 %------------------------------------------------------------------
-% -spec new_buttons(panel_handle(), control_list_def()) -> [control_handle()].
-% new_buttons({panel, PanelId}, Def) -> wx_object:call(?SERVER, {new_buttons, PanelId, Def}).
-
+-spec new_button(panel_handle, string()) -> button_handle().
 new_button({panel, PanelId}, Text) -> wx_object:call(?SERVER, {new_button, PanelId, Text}).
 
-% TODO: this should make the new_buttons call obsolete!
 -spec build_controls(panel_handle(), control_list_def()) -> [control_handle()].
 build_controls(Handle = {panel, _PanelId}, Def) ->
     [build_control(Handle, Control) || Control <- Def].
 
 build_control({panel, _PanelId}, blank) -> blank;
-build_control(Handle = {panel, _PanelId}, {button, Text}) -> new_button(Handle, Text);
-build_control(Handle = {panel, _PanelId}, {label, Text}) -> new_label(Handle, Text);
-build_control(Handle = {panel, _PanelId}, {textbox, Text}) -> new_textbox(Handle, Text);
-build_control(Handle = {panel, _PanelId}, {listbox}) -> new_listbox(Handle);
+build_control(Handle = {panel, _PanelId}, {button, Text})           -> new_button(Handle, Text);
+build_control(Handle = {panel, _PanelId}, {label, Text})            -> new_label(Handle, Text);
+build_control(Handle = {panel, _PanelId}, {textbox, Text})          -> new_textbox(Handle, Text);
+build_control(Handle = {panel, _PanelId}, {listbox})                -> new_listbox(Handle);
 build_control(Handle = {panel, _PanelId}, {textbox, Text, Options}) -> new_textbox(Handle, Text, Options).
 
 % Textbox constructors
@@ -209,38 +203,36 @@ new_textbox({panel, PanelId}, Text, Options) ->
 % Text manipulation functions for: Labels, Textboxes.
 %------------------------------------------------------------------
 -spec append_text(textbox_handle() | label_handle(), string()) -> ok.
-append_text({textbox, TextboxId}, Text) -> wx_object:call(?SERVER, {append_text, TextboxId, Text});
-append_text({label, LabelId}, Text) -> wx_object:call(?SERVER, {append_text, LabelId, Text}).
+append_text({Type, Id}, Text) when Type == textbox; Type == label -> 
+    wx_object:call(?SERVER, {append_text, Id, Text}).
 
 -spec get_text(textbox_handle() | label_handle()) -> string().
-get_text({textbox, TextboxId}) -> wx_object:call(?SERVER, {get_text, TextboxId});
-get_text({label, LabelId}) -> wx_object:call(?SERVER, {get_text, LabelId}).
+get_text({Type, Id}) when Type == textbox; Type == label -> 
+    wx_object:call(?SERVER, {get_text, Id}).
 
 -spec set_text(textbox_handle() | label_handle(), string()) -> ok.
-% -spec set_text(label_handle(), string()) -> ok.
-set_text({textbox, TextboxId}, Text) -> wx_object:call(?SERVER, {set_text, TextboxId, Text});
-set_text({label, LabelId}, Text) -> wx_object:call(?SERVER, {set_text, LabelId, Text}).
+set_text({Type, Id}, Text) when Type == textbox; Type == label ->
+    wx_object:call(?SERVER, {set_text, Id, Text}).
 
 -spec clear(textbox_handle() | label_handle()) -> ok.
-clear({textbox, TextboxId}) -> wx_object:call(?SERVER, {clear, TextboxId});
-clear({label, LabelId}) -> wx_object:call(?SERVER, {clear, LabelId}).
+clear({Type, Id}) when Type == textbox; Type == label ->
+    wx_object:call(?SERVER, {clear, Id}).
 
 
 % Listbox constructors
 %------------------------------------------------------------------
 
-% TODO: SPEC
-% TODO: handle definitions
 % TODO: add options and listitems here ??
 % TODO: size needs to be an option!
 % TODO: multi-select listboxes?
+
+-spec new_listbox(panel_handle()) -> listbox_handle().
 new_listbox({panel, PanelId}) -> wx_object:call(?SERVER, {new_listbox, PanelId}).
 
 
 % Listbox manipulation functions
 %------------------------------------------------------------------
 fill_listbox({listbox, Id}, Items) -> wx_object:call(?SERVER, {fill_listbox, Id, Items}).
-
 
 % Helpful utils to make WX easier to work with
 %------------------------------------------------------------------
@@ -274,12 +266,12 @@ to_wx_flag(Items) when is_list(Items) ->
     {WxStyle, {others, UnmodifiedTuples}} = extract_flag_codes(Items2),
     [WxStyle|UnmodifiedTuples];
 
-to_wx_flag(all)            -> ?wxALL;
-to_wx_flag(expand)         -> ?wxEXPAND;
-to_wx_flag(top)            -> ?wxTOP;
-to_wx_flag(bottom)         -> ?wxBOTTOM;
-to_wx_flag(center)         -> ?wxCENTER;
-to_wx_flag(Unknown)        -> Unknown.
+to_wx_flag(all)         -> ?wxALL;
+to_wx_flag(expand)      -> ?wxEXPAND;
+to_wx_flag(top)         -> ?wxTOP;
+to_wx_flag(bottom)      -> ?wxBOTTOM;
+to_wx_flag(center)      -> ?wxCENTER;
+to_wx_flag(Unknown)     -> Unknown.
 
 extract_flag_codes(Items) -> extract_flag_codes(Items, 0, []).
 extract_flag_codes([], FlagCode, Tuples) ->
@@ -303,10 +295,6 @@ bind_values_to_controls([{listbox, Id}|OtherControls], [ListItems|OtherValues]) 
 
 %Ignore other types of controls. This way, we can bind to a mixed list without binding to, for example, labels.
 bind_values_to_controls([_AnythingElse|OtherControls], Values) -> bind_values_to_controls(OtherControls, Values).
-
-
-
-
 
 
 

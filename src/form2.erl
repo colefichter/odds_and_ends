@@ -28,7 +28,7 @@ init() ->
     [w:append_child(ButtonBox, B, [center]) || B <- Buttons],
 
     % TODO: how to send EXPAND flag?
-    w:fill_flexgrid_sizer(FlexGridSizer, Controls ++ [ButtonBox]),
+    w:fill_grid_sizer(FlexGridSizer, Controls ++ [ButtonBox]),
 
     % Make the multiline Review TB (in the 3rd row) grow vertically when the window is resized.    
     w:expand_row(FlexGridSizer, 3), %NOTE: the index is zero-based!
