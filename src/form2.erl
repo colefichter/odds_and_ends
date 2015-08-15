@@ -13,10 +13,11 @@ init() ->
     ButtonBox = w:new_row_sizer(),
     FlexGridSizer = w:new_flexgrid_sizer(5, 2, 9, 25),
 
+    Genres = ["Comedy", "Drama", "Epic", "Erotic", "Nonsense"],
     ControlDef = [
         {label, "Title"}, {textbox, ""}, % Just for fun, we'll use data binding (below).
         {label, "Author"}, {textbox, ""},
-        {label, "Genre"}, {listbox},
+        {label, "Genre"}, {listbox, Genres},
         {label, "Review"}, {textbox, "", [multiline]},
         blank % This keeps the buttons in the right column.
     ],
@@ -43,8 +44,7 @@ init() ->
     w:set_sizer(Panel, HBox),
 
     % Experimental data binding.
-    Genres = ["Comedy", "Drama", "Epic", "Erotic", "Nonsense"],
-    Values = ["War and Peace", "Tolstoy", Genres, "Seems like it will never end..."],
+    Values = ["War and Peace", "Tolstoy", "Drama", "Seems like it will never end..."],
     w:bind_values_to_controls(Controls, Values), % Note: the library is ignoring the label controls!
 
     w:show(Frame),

@@ -182,8 +182,9 @@ build_controls(Handle = {panel, _PanelId}, Def) ->
 build_control({panel, _PanelId}, blank) -> blank;
 build_control(Handle = {panel, _PanelId}, {button, Text})           -> new_button(Handle, Text);
 build_control(Handle = {panel, _PanelId}, {label, Text})            -> new_label(Handle, Text);
+build_control(Handle = {panel, _PanelId}, {textbox})                -> new_textbox(Handle, "");
 build_control(Handle = {panel, _PanelId}, {textbox, Text})          -> new_textbox(Handle, Text);
-build_control(Handle = {panel, _PanelId}, {listbox})                -> new_listbox(Handle);
+build_control(Handle = {panel, _PanelId}, {listbox, Items})         -> new_listbox(Handle, Items);
 build_control(Handle = {panel, _PanelId}, {textbox, Text, Options}) -> new_textbox(Handle, Text, Options).
 
 % Textbox constructors
@@ -227,12 +228,19 @@ clear({Type, Id}) when Type == textbox; Type == label ->
 % TODO: multi-select listboxes?
 
 -spec new_listbox(panel_handle()) -> listbox_handle().
-new_listbox({panel, PanelId}) -> wx_object:call(?SERVER, {new_listbox, PanelId}).
+new_listbox(H = {panel, _PanelId}) -> new_listbox(H, []).
+
+-spec new_listbox(panel_handle(), list()) -> listbox_handle().
+new_listbox({panel, PanelId}, Items) -> wx_object:call(?SERVER, {new_listbox, PanelId, Items}).
 
 
 % Listbox manipulation functions
 %------------------------------------------------------------------
 fill_listbox({listbox, Id}, Items) -> wx_object:call(?SERVER, {fill_listbox, Id, Items}).
+
+get_selection({listbox, Id}) -> wx_object:call(?SERVER, {get_listbox_selection, Id}).
+
+set_selection({listbox, Id}, Text) -> wx_object:call(?SERVER, {select_listbox_selection, Id, Text}).
 
 % Helpful utils to make WX easier to work with
 %------------------------------------------------------------------
@@ -287,17 +295,29 @@ extract_flag_codes([H|T], FlagCode, Tuples) ->
 %------------------------------------------------------------------
 bind_values_to_controls([], []) -> ok;
 bind_values_to_controls([{textbox, Id}|OtherControls], [Text|OtherValues]) ->
-    w:set_text({textbox, Id}, Text),
+    ok = w:set_text({textbox, Id}, Text),
     bind_values_to_controls(OtherControls, OtherValues);
-bind_values_to_controls([{listbox, Id}|OtherControls], [ListItems|OtherValues]) ->
-    w:fill_listbox({listbox, Id}, ListItems),
+bind_values_to_controls([H = {listbox, _Id}|OtherControls], [Text|OtherValues]) ->
+    ok = w:set_selection(H, Text),
     bind_values_to_controls(OtherControls, OtherValues);
-
 %Ignore other types of controls. This way, we can bind to a mixed list without binding to, for example, labels.
 bind_values_to_controls([_AnythingElse|OtherControls], Values) -> bind_values_to_controls(OtherControls, Values).
 
 
+unbind_values_from_controls(Controls) when is_list(Controls) ->
+    unbind_values_from_controls(Controls, []).
 
+unbind_values_from_controls([], Values) -> lists:reverse(Values);
+unbind_values_from_controls([H = {textbox, _Id}|Controls], Values) ->
+    Value = w:get_text(H),
+    unbind_values_from_controls(Controls, [Value | Values]);
+unbind_values_from_controls([H = {listbox, _Id}|Controls], Values) ->
+    Value = w:get_selection(H),
+    unbind_values_from_controls(Controls, [Value | Values]);
+unbind_values_from_controls([_AnythingElse|Controls], Values) ->
+    unbind_values_from_controls(Controls, Values).
+
+% TODO: get listbox selection
 
 %------------------------------------------------------------------
 % Unit tests: Move these into a separate module
@@ -403,6 +423,27 @@ label_test() ->
     ?assertEqual("New Text More", w:get_text(L1)),
     ok = w:clear(L1),
     ?assertEqual("", w:get_text(L1)),
+    ok = w_server:stop().
+
+databind_unbind_test() ->
+    w_server:start(),
+    Frame = w:new_frame("Listbox tests!"),
+    Panel = w:new_panel(Frame),
+    Genres = ["Comedy", "Drama", "Epic", "Erotic", "Nonsense"],
+    ControlDef = [  {label, "Text 1"}, {textbox},
+                    {label, "Text 2"}, {textbox, "", [multiline]},
+                    {label, "List 1"}, {listbox, Genres},
+                    {button, "OK"}],
+    Form = w:build_controls(Panel, ControlDef),
+    ValuesToBind = ["Textbox 1", "Multiline\nTextbox 2", "Epic"],
+    ok = w:bind_values_to_controls(Form, ValuesToBind),
+    Values = w:unbind_values_from_controls(Form),
+    ?assert(is_list(Values)),
+    ?assertEqual(3, length(Values)),
+    [Tb1, Tb2, Lb1] = Values,
+    ?assertEqual("Textbox 1", Tb1),
+    ?assertEqual("Multiline\nTextbox 2", Tb2),
+    ?assertEqual("Epic", Lb1),
     ok = w_server:stop().
 
 

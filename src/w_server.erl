@@ -213,9 +213,9 @@ handle_call({clear, ControlId}, _From, State) ->
 
 % Listbox constructors
 %------------------------------------------------------------------
-handle_call({new_listbox, PanelId}, From, State) ->
+handle_call({new_listbox, PanelId, Items}, From, State) ->
     Id = next_id(),
-    WxListbox = load_control_and_run(PanelId, wxListBox, new, [Id, [{size, {-1,50}}]]), % TODO: size needs to be an option!
+    WxListbox = load_control_and_run(PanelId, wxListBox, new, [Id, [{size, {-1,50}}, {choices, Items}]]), % TODO: size needs to be an option!
     set_control(to_record(From, Id, listbox, WxListbox)),
     {reply, {listbox, Id}, State};
 
@@ -223,6 +223,14 @@ handle_call({new_listbox, PanelId}, From, State) ->
 %------------------------------------------------------------------
 handle_call({fill_listbox, ListboxId, Items}, _From, State) ->
     load_control_and_run(ListboxId, wxListBox, set, [Items]),
+    {reply, ok, State};
+
+handle_call({get_listbox_selection, Id}, _From, State) ->
+    Selection = load_control_and_run(Id, wxControlWithItems, getStringSelection),
+    {reply, Selection, State};
+
+handle_call({select_listbox_selection, Id, Text}, _From, State) ->
+    load_control_and_run(Id, wxControlWithItems, setStringSelection, [Text]),
     {reply, ok, State};
 
 % Unused wx_object callbacks

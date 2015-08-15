@@ -13,8 +13,8 @@ start() ->
     OnPaint = fun(_Evt, _Obj) ->
             Paint = wxPaintDC:new(Panel),
             wxDC:setPen(Paint, Pen), 
-            {A1,A2,A3} = now(),
-            random:seed(A1, A2, A3),
+            %{A1,A2,A3} = now(),
+            %random:seed(A1, A2, A3),
             drawpoints(Paint, 0),
             wxPaintDC:destroy(Paint)
    end,
@@ -27,7 +27,7 @@ start() ->
  
 drawpoints(_,10000) -> ok;
 drawpoints(Paint,Count) ->
-    X  = random:uniform(250) - 1 , 
-    Y  = random:uniform(150) - 1,
+    X  = rand:uniform(250) - 1 , 
+    Y  = rand:uniform(150) - 1,
     wxDC:drawPoint(Paint,{X,Y}),
     drawpoints(Paint, Count + 1).
