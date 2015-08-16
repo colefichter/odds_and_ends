@@ -23,11 +23,7 @@ stop() -> wx_object:cast(?MODULE, stop).
 % Server Implementation (wx_object behaviour callbacks)
 %------------------------------------------------------------------
 init([RepoModule]) ->
-    put(repo, RepoModule),
-    create_identity(),
-    WxServer = wx:new(),
-    set_wx_server(WxServer),
-    UselessWindow = wxWindow:new(),
+    UselessWindow = initialize_services(RepoModule),
     {UselessWindow, []}.
 
 % Terminate the process loop when the window closes (via the close button X in the top corner).
@@ -196,18 +192,15 @@ handle_call({new_textbox, PanelId, Options}, From, State) ->
 % Text manipulation functions for: Label, Textbox
 %------------------------------------------------------------------
 handle_call({append_text, ControlId, Text}, _From, State) ->    
-    %load_control_and_run(TextboxId, wxTextCtrl, appendText, [Text]),
     append_text(ControlId, Text),
     {reply, ok, State};
 handle_call({get_text, ControlId}, _From, State) ->
-    %Text = load_control_and_run(TextboxId, wxTextCtrl, getValue),
     Text = get_text(ControlId),
     {reply, Text, State};
 handle_call({set_text, ControlId, Text}, _From, State) -> 
     set_text(ControlId, Text),
     {reply, ok, State};
 handle_call({clear, ControlId}, _From, State) ->
-    %load_control_and_run(TextboxId, wxTextCtrl, clear),
     clear_text(ControlId),
     {reply, ok, State};
 
@@ -237,21 +230,30 @@ handle_call({select_listbox_selection, Id, Text}, _From, State) ->
 %------------------------------------------------------------------
 handle_call(Msg, _From, State) -> {reply, {unknown_message, Msg}, State}.
 
-handle_info({'DOWN', Ref, process, ClientPid, Reason}, State) ->
+handle_info({'DOWN', _Ref, process, ClientPid, _Reason}, State) ->
     %io:format("CLEANUP CONTROLS ~p ~p ~p~n", [Ref, ClientPid, Reason]),
     cleanup_all_controls(ClientPid),
     {noreply, State};
-handle_info(_Msg, State) -> {noreply, State}.
-handle_cast(stop, State) -> {stop, normal, State};
-handle_cast(_Msg, State) -> {noreply, State}.
-code_change(_, _, State) -> {stop, ignore, State}.
-terminate(_Reason, _State) -> ok.
+handle_info(_Msg, State)    -> {noreply, State}.
+handle_cast(stop, State)    -> {stop, normal, State};
+handle_cast(_Msg, State)    -> {noreply, State}.
+code_change(_, _, State)    -> {stop, ignore, State}.
+terminate(_Reason, _State)  -> ok.
 
 %%%%%
 %% TODO: break internal functions into a stand-alone module!
 %%%%%
+
 % Internal Functions
 %------------------------------------------------------------------
+initialize_services(RepoModule) ->
+    put(repo, RepoModule),
+    create_identity(),
+    WxServer = wx:new(),
+    set_wx_server(WxServer),
+    UselessWindow = wxWindow:new(),
+    UselessWindow.
+
 new_window(Title, Options) ->
     Id = next_id(),
     WxFrame = wxFrame:new(get_wx_server(), Id, Title, Options),
@@ -261,7 +263,7 @@ new_window(Title, Options) ->
     wxFrame:connect(WxFrame, command_button_clicked), %Regular button commands
     {Id, WxFrame}.
 
-new_panel(WxFrame, []) -> {next_id(), wxPanel:new(WxFrame)};
+new_panel(WxFrame, [])      -> {next_id(), wxPanel:new(WxFrame)};
 new_panel(WxFrame, Options) -> {next_id(), wxPanel:new(WxFrame, Options)}.
 
 % Load a wxControl by id, then invoke the given Fun with the wxControl as the first or only argument.
@@ -293,9 +295,7 @@ new_toolbar_button(Toolbar, From, {Title, IconName, LongHelp}, W, H) ->
 
 get_bitmap(Name, W, H) -> wxArtProvider:getBitmap(Name, [{size, {W, H}}]).
 
-fill_grid_sizer(Sizer, Def) ->
-    Controls = [add_to_grid_sizer(Sizer, X) || X <- Def],
-    Controls.
+fill_grid_sizer(Sizer, Def) -> [add_to_grid_sizer(Sizer, X) || X <- Def].
 
 
 % Text manipulation helpers
@@ -312,21 +312,21 @@ set_text(ControlId, Text) when is_integer(ControlId) ->
     set_text(Control, type_of(Control), Text).
 
 set_text(Control, textbox, Text) -> wxTextCtrl:setValue(wx_control_of(Control), Text);
-set_text(Control, label, Text) -> wxStaticText:setLabel(wx_control_of(Control), Text).
+set_text(Control, label, Text)   -> wxStaticText:setLabel(wx_control_of(Control), Text).
 
 clear_text(ControlId) when is_integer(ControlId) ->
     Control = get_control(ControlId),
     clear_text(Control, type_of(Control)).
 
 clear_text(Control, textbox) -> wxTextCtrl:clear(wx_control_of(Control));
-clear_text(Control, label) -> wxStaticText:setLabel(wx_control_of(Control), "").
+clear_text(Control, label)   -> wxStaticText:setLabel(wx_control_of(Control), "").
 
 append_text(ControlId, Text) ->
     Control = get_control(ControlId),
     append_text(Control, type_of(Control), Text).
 
 append_text(Control, textbox, Text) -> wxTextCtrl:appendText(wx_control_of(Control), Text);
-append_text(Control, label, Text) ->
+append_text(Control, label, Text)   ->
     WxControl = wx_control_of(Control),
     CurrentText = wxStaticText:getLabel(WxControl),
     wxStaticText:setLabel(WxControl, CurrentText ++ Text).
@@ -336,27 +336,24 @@ append_text(Control, label, Text) ->
 add_to_grid_sizer(Sizer, blank) -> 
     wxSizer:addSpacer(Sizer, 0);
 add_to_grid_sizer(Sizer, {label, Id}) ->
-    WxControl = get_wx_control(Id),
-    wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: need to handle proportion too.
+    add_to_grid_sizer_by_id(Sizer, Id, [{flag, ?wxEXPAND}]); % TODO: need to handle proportion too.
 add_to_grid_sizer(Sizer, {textbox, Id}) ->
-    WxControl = get_wx_control(Id),
-    wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: does it make sense to have this as a default?
+    add_to_grid_sizer_by_id(Sizer, Id, [{flag, ?wxEXPAND}]); % TODO: does it make sense to have this as a default?
 add_to_grid_sizer(Sizer, {listbox, Id}) ->
-    WxControl = get_wx_control(Id),
-    wxSizer:add(Sizer, WxControl, [{flag, ?wxEXPAND}]); % TODO: options??
+    add_to_grid_sizer_by_id(Sizer, Id, [{flag, ?wxEXPAND}]); % TODO: options??
 add_to_grid_sizer(Sizer, {button, Id, _Text}) ->
-    WxButton = get_wx_control(Id),
-    wxSizer:add(Sizer, WxButton, [{proportion, 0}, {flag, ?wxEXPAND}]); % TODO: options!
-add_to_grid_sizer(Sizer, {box_sizer, Id}) ->
-    WxChildSizer = get_wx_control(Id),
-    wxSizer:add(Sizer, WxChildSizer, []). % TODO: options
+    add_to_grid_sizer_by_id(Sizer, Id, [{proportion, 0}, {flag, ?wxEXPAND}]); % TODO: options!
+add_to_grid_sizer(Sizer, {box_sizer, Id}) -> add_to_grid_sizer_by_id(Sizer, Id, []).
+
+add_to_grid_sizer_by_id(Sizer, Id, Options) ->
+    WxChildControl = get_wx_control(Id),
+    wxSizer:add(Sizer, WxChildControl, Options).
 
 new_button(WxPanel, From, Text) ->
     Id = next_id(),
     WxButton = wxButton:new(WxPanel, Id, [{label, Text}]),
     set_control(to_record(From, Id, button, WxButton, Text)),
     {button, Id, Text}.
-
 
 cleanup_all_controls(ClientPid) ->
     ControlRecords = get_controls_by_owner_pid(ClientPid),
@@ -390,14 +387,16 @@ destroy_wx_control(#control{wx_control=WxControl} = Control) when is_record(Cont
 
 % Record Manipulation
 %------------------------------------------------------------------
-type_of(R) when is_record(R, control) -> R#control.type.
-id_of(R) when is_record(R, control) -> R#control.id.
-text_of(R) when is_record(R, control) -> R#control.text.
-owner_of(R) when is_record(R, control) -> R#control.owner_pid.
+type_of(R) when is_record(R, control)       -> R#control.type.
+id_of(R) when is_record(R, control)         -> R#control.id.
+text_of(R) when is_record(R, control)       -> R#control.text.
+owner_of(R) when is_record(R, control)      -> R#control.owner_pid.
 wx_control_of(R) when is_record(R, control) -> R#control.wx_control.
 
-to_record({OwnerPid, _}, Id, Type, WxControl) -> #control{owner_pid=OwnerPid, id=Id, type=Type, wx_control=WxControl}.
-to_record({OwnerPid, _}, Id, Type, WxControl, Text) -> #control{owner_pid=OwnerPid, id=Id, type=Type, wx_control=WxControl, text=Text}.
+to_record({OwnerPid, _}, Id, Type, WxControl) -> 
+    #control{owner_pid=OwnerPid, id=Id, type=Type, wx_control=WxControl}.
+to_record({OwnerPid, _}, Id, Type, WxControl, Text) -> 
+    #control{owner_pid=OwnerPid, id=Id, type=Type, wx_control=WxControl, text=Text}.
 
 % Wrapper around the repo:
 %------------------------------------------------------------------
@@ -407,18 +406,23 @@ create_identity() -> (repo()):create_identity().
 next_id() -> (repo()):next_id().
 
 get_wx_server() -> (repo()):get_wx_server().
+
 set_wx_server(Server) -> (repo()):set_wx_server(Server).
 
 get_control(ControlId) ->
     {ok, ControlRecord} = (repo()):get_control(ControlId),
     ControlRecord.
+
 get_wx_control(ControlId) ->
     {ok, ControlRecord} = (repo()):get_control(ControlId),
     wx_control_of(ControlRecord).
+
 set_control(ControlRecord) when is_record(ControlRecord, control) ->
     (repo()):set_control(id_of(ControlRecord), ControlRecord).
+
 remove_control(ControlId) ->
     ok = (repo()):remove_control(ControlId).
+
 get_controls_by_owner_pid(OwnerPid) ->
     (repo()):get_controls_by_owner_pid(OwnerPid).
 

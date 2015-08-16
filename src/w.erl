@@ -10,16 +10,16 @@
 %------------------------------------------------------------------
 
 % Return types for this API:
--type frame_handle() :: {frame, integer()}.
--type panel_handle() :: {panel, integer()}.
--type button_handle() :: {button, integer(), string()}.
--type toolbar_button_handle() :: {button, integer(), string()}.
--type label_handle() :: {label, integer()}.
--type textbox_handle() :: {textbox, integer()}.
--type listbox_handle() :: {listbox, integer()}.
--type sizer_handle() :: {box_sizer, integer()}.
--type grid_sizer_handle() :: {grid_sizer, integer()}.
--type flexgrid_sizer_handle() :: {flexgrid_sizer, integer()}.
+-type frame_handle()            :: {frame, integer()}.
+-type panel_handle()            :: {panel, integer()}.
+-type button_handle()           :: {button, integer(), string()}.
+-type toolbar_button_handle()   :: {button, integer(), string()}.
+-type label_handle()            :: {label, integer()}.
+-type textbox_handle()          :: {textbox, integer()}.
+-type listbox_handle()          :: {listbox, integer()}.
+-type sizer_handle()            :: {box_sizer, integer()}.
+-type grid_sizer_handle()       :: {grid_sizer, integer()}.
+-type flexgrid_sizer_handle()   :: {flexgrid_sizer, integer()}.
 -type control_handle() :: blank
                         | button_handle()
                         | toolbar_button_handle()
@@ -28,15 +28,15 @@
                         | listbox_handle().
 
 % Reusable types for common options:
--type opt_pos() :: {pos, {integer(), integer()}}.
--type opt_size() :: {size, {integer(), integer()}}.
--type opt_style() :: {style, integer()}.
+-type opt_pos()     :: {pos, {integer(), integer()}}.
+-type opt_size()    :: {size, {integer(), integer()}}.
+-type opt_style()   :: {style, integer()}.
 
 % Types for the various Options list arguments.
 -type frame_options() :: [frame_option()].
 -type frame_option() :: opt_pos()
-                      |  opt_size()
-                      |  opt_style().
+                      | opt_size()
+                      | opt_style().
 
 -type panel_options() :: [panel_option()].
 -type panel_option() :: {winid, integer()} % TODO: do we need this option?
@@ -176,16 +176,16 @@ fill_grid_sizer({Type, Id}, Controls) when Type == grid_sizer; Type == flexgrid_
 new_button({panel, PanelId}, Text) -> wx_object:call(?SERVER, {new_button, PanelId, Text}).
 
 -spec build_controls(panel_handle(), control_list_def()) -> [control_handle()].
-build_controls(Handle = {panel, _PanelId}, Def) ->
-    [build_control(Handle, Control) || Control <- Def].
+build_controls(H = {panel, _PanelId}, Def) ->
+    [build_control(H, Control) || Control <- Def].
 
-build_control({panel, _PanelId}, blank) -> blank;
-build_control(Handle = {panel, _PanelId}, {button, Text})           -> new_button(Handle, Text);
-build_control(Handle = {panel, _PanelId}, {label, Text})            -> new_label(Handle, Text);
-build_control(Handle = {panel, _PanelId}, {textbox})                -> new_textbox(Handle, "");
-build_control(Handle = {panel, _PanelId}, {textbox, Text})          -> new_textbox(Handle, Text);
-build_control(Handle = {panel, _PanelId}, {listbox, Items})         -> new_listbox(Handle, Items);
-build_control(Handle = {panel, _PanelId}, {textbox, Text, Options}) -> new_textbox(Handle, Text, Options).
+build_control({panel, _Id}, blank) -> blank;
+build_control(H = {panel, _Id}, {button, Text})           -> new_button(H, Text);
+build_control(H = {panel, _Id}, {label, Text})            -> new_label(H, Text);
+build_control(H = {panel, _Id}, {listbox, Items})         -> new_listbox(H, Items);
+build_control(H = {panel, _Id}, {textbox})                -> new_textbox(H, "");
+build_control(H = {panel, _Id}, {textbox, Text})          -> new_textbox(H, Text);
+build_control(H = {panel, _Id}, {textbox, Text, Options}) -> new_textbox(H, Text, Options).
 
 % Textbox constructors
 %------------------------------------------------------------------
@@ -219,7 +219,6 @@ set_text({Type, Id}, Text) when Type == textbox; Type == label ->
 clear({Type, Id}) when Type == textbox; Type == label ->
     wx_object:call(?SERVER, {clear, Id}).
 
-
 % Listbox constructors
 %------------------------------------------------------------------
 
@@ -232,7 +231,6 @@ new_listbox(H = {panel, _PanelId}) -> new_listbox(H, []).
 
 -spec new_listbox(panel_handle(), list()) -> listbox_handle().
 new_listbox({panel, PanelId}, Items) -> wx_object:call(?SERVER, {new_listbox, PanelId, Items}).
-
 
 % Listbox manipulation functions
 %------------------------------------------------------------------
@@ -288,8 +286,6 @@ extract_flag_codes([H|T], FlagCode, Tuples) when is_integer(H) ->
     extract_flag_codes(T, FlagCode bor H, Tuples);
 extract_flag_codes([H|T], FlagCode, Tuples) ->
     extract_flag_codes(T, FlagCode, [H|Tuples]).
-
-
 
 % Experimental data binding.
 %------------------------------------------------------------------
