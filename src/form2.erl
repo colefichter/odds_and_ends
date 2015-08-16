@@ -21,7 +21,7 @@ init() ->
         {label, "Review"}, {textbox, "", [multiline]},
         blank % This keeps the buttons in the right column.
     ],
-    Controls = w:build_controls(Panel, ControlDef),
+    Form = w:build_controls(Panel, ControlDef),
 
     % This is a bit clumsy, but I want two buttons in the right column, beneath the textboxes:
     ButtonDef = [{button, "Save"}, {button, "Cancel"}],
@@ -29,7 +29,7 @@ init() ->
     [w:append_child(ButtonBox, B, [center]) || B <- Buttons],
 
     % TODO: how to send EXPAND flag?
-    w:fill_grid_sizer(FlexGridSizer, Controls ++ [ButtonBox]),
+    w:fill_grid_sizer(FlexGridSizer, Form ++ [ButtonBox]),
 
     % Make the multiline Review TB (in the 3rd row) grow vertically when the window is resized.    
     w:expand_row(FlexGridSizer, 3), %NOTE: the index is zero-based!
@@ -45,15 +45,15 @@ init() ->
 
     % Experimental data binding.
     Values = ["War and Peace", "Tolstoy", "Drama", "Seems like it will never end..."],
-    w:bind_values_to_controls(Controls, Values), % Note: the library is ignoring the label controls!
+    w:bind_values_to_controls(Form, Values), % Note: the library is ignoring the label controls!
 
     w:show(Frame),
-    loop().
+    loop(Form).
 
-loop() ->
+loop(Form) ->
     receive 
         {click, {button, _Id, "Save"}} ->
-            io:format("Saving values: TODO get values~n"),
+            print_values(Form),
             exit(normal);
         {click, {button, _Id, "Cancel"}} ->
             io:format("Cancelling~n"),
@@ -61,4 +61,9 @@ loop() ->
         Msg ->
             io:format("CALLBACK ~p~n", [Msg])            
     end,
-    loop().
+    loop(Form).
+
+print_values(Form) ->
+    [Title, Author, Genre, Review] = w:unbind_values_from_controls(Form),
+    io:format("Saving values!~n Title: ~p~n Author: ~p~n Genre: ~p~n Review: ~p~n", 
+        [Title, Author, Genre, Review]).

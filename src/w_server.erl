@@ -238,7 +238,7 @@ handle_call({select_listbox_selection, Id, Text}, _From, State) ->
 handle_call(Msg, _From, State) -> {reply, {unknown_message, Msg}, State}.
 
 handle_info({'DOWN', Ref, process, ClientPid, Reason}, State) ->
-    io:format("CLEANUP CONTROLS ~p ~p ~p~n", [Ref, ClientPid, Reason]),
+    %io:format("CLEANUP CONTROLS ~p ~p ~p~n", [Ref, ClientPid, Reason]),
     cleanup_all_controls(ClientPid),
     {noreply, State};
 handle_info(_Msg, State) -> {noreply, State}.
@@ -367,7 +367,7 @@ cleanup_all_controls(ClientPid) ->
 
 cleanup([]) -> ok;
 cleanup([ControlRecord|T]) ->
-    io:format(" deleting control ~p ~p ~p~n", [id_of(ControlRecord), type_of(ControlRecord), wx_control_of(ControlRecord)]),
+    %io:format(" deleting control ~p ~p ~p~n", [id_of(ControlRecord), type_of(ControlRecord), wx_control_of(ControlRecord)]),
     destroy_wx_control(ControlRecord),
     remove_control(id_of(ControlRecord)),
     cleanup(T).
