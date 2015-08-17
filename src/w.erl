@@ -17,6 +17,7 @@
 -type label_handle()            :: {label, integer()}.
 -type textbox_handle()          :: {textbox, integer()}.
 -type listbox_handle()          :: {listbox, integer()}.
+-type combobox_handle()         :: {combobox, integer()}.
 -type sizer_handle()            :: {box_sizer, integer()}.
 -type grid_sizer_handle()       :: {grid_sizer, integer()}.
 -type flexgrid_sizer_handle()   :: {flexgrid_sizer, integer()}.
@@ -25,7 +26,8 @@
                         | toolbar_button_handle()
                         | label_handle()
                         | textbox_handle()
-                        | listbox_handle().
+                        | listbox_handle()
+                        | combobox_handle().
 
 % Reusable types for common options:
 -type opt_pos()     :: {pos, {integer(), integer()}}.
@@ -47,7 +49,7 @@
 -type textbox_options() :: [textbox_option()].
 -type textbox_option() :: opt_pos()
                         | opt_size().
-                            %TODO: style and validators! http://www.erlang.org/doc/man/wxTextCtrl.html#new-3
+            %TODO: style and validators! http://www.erlang.org/doc/man/wxTextCtrl.html#new-3
 
 % Input types for arguments to builders:
 -type toolbar_def() :: [toolbar_button_def()].
@@ -60,7 +62,10 @@
                      | {textbox, string()}
                      | {textbox, string(), textbox_options()}
                      | {label, string()}
-                     | {listbox}.
+                     | {listbox}
+                     | {listbox, [string()]}
+                     | {combobox}
+                     | {combobox, [string()]}.
 
 % Frame
 %------------------------------------------------------------------
@@ -126,7 +131,7 @@ set_min_size({box_sizer, SizerId}, Width, Height) -> wx_object:call(?SERVER, {se
 % TODO: appending spacers and children should work more like filling the grid sizer. See form2 example where the buttons are added.
 append_child({box_sizer, ParentId}, {button, ChildId, _Text}) -> 
     append_child(ParentId, ChildId, []);
-append_child({box_sizer, ParentId}, {Type, ChildId}) when Type == box_sizer; Type == grid_sizer; Type == flexgrid_sizer; Type == textbox -> 
+append_child({box_sizer, ParentId}, {Type, ChildId}) when Type == box_sizer; Type == grid_sizer; Type == flexgrid_sizer; Type == textbox; Type == label; Type == listbox -> 
     append_child(ParentId, ChildId, []).
 
 append_child({box_sizer, ParentId}, {button, ChildId, _Text}, Options) -> 
@@ -182,8 +187,11 @@ build_controls(H = {panel, _PanelId}, Def) ->
 build_control({panel, _Id}, blank) -> blank;
 build_control(H = {panel, _Id}, {button, Text})           -> new_button(H, Text);
 build_control(H = {panel, _Id}, {label, Text})            -> new_label(H, Text);
+build_control(H = {panel, _Id}, {listbox})                -> new_listbox(H);
 build_control(H = {panel, _Id}, {listbox, Items})         -> new_listbox(H, Items);
 build_control(H = {panel, _Id}, {textbox})                -> new_textbox(H, "");
+build_control(H = {panel, _Id}, {combobox})               -> new_combobox(H);
+build_control(H = {panel, _Id}, {combobox, Items})        -> new_combobox(H, Items);
 build_control(H = {panel, _Id}, {textbox, Text})          -> new_textbox(H, Text);
 build_control(H = {panel, _Id}, {textbox, Text, Options}) -> new_textbox(H, Text, Options).
 
@@ -239,6 +247,13 @@ fill_listbox({listbox, Id}, Items) -> wx_object:call(?SERVER, {fill_listbox, Id,
 get_selection({listbox, Id}) -> wx_object:call(?SERVER, {get_listbox_selection, Id}).
 
 set_selection({listbox, Id}, Text) -> wx_object:call(?SERVER, {select_listbox_selection, Id, Text}).
+
+
+% Combobox constructors
+%------------------------------------------------------------------
+new_combobox(H = {panel, _PanelId}) -> new_combobox(H, []).
+
+new_combobox({panel, PanelId}, Items) -> wx_object:call(?SERVER, {new_combobox, PanelId, Items}).
 
 % Helpful utils to make WX easier to work with
 %------------------------------------------------------------------
