@@ -17,7 +17,7 @@ init() ->
     ControlDef = [
         {label, "Title"}, {textbox, ""}, % Just for fun, we'll use data binding (below).
         {label, "Author"}, {textbox, ""},
-        {label, "Genre"}, {listbox, Genres},
+        {label, "Genre"}, {listbox, -1, 50, Genres},
         {label, "Review"}, {textbox, "", [multiline]},
         blank % This keeps the buttons in the right column.
     ],

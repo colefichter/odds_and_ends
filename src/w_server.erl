@@ -46,7 +46,7 @@ handle_event(Msg = #wx{id=ControlId, event=#wxClose{}}, State) ->
 %     {noreply, State};
 % Handle menu & toolbar click events:
 
-handle_event(Msg = #wx{id=ControlId, event=#wxCommand{ type=command_menu_selected }}, State) -> 
+handle_event(Msg = #wx{id=ControlId, event=#wxCommand{ type=command_menu_selected}}, State) -> 
     io:format("wxCommand menu click. ~p ~p~n", [self(), Msg]),
     ControlRecord = get_control(ControlId),
     ClientPid = owner_of(ControlRecord),
@@ -206,10 +206,9 @@ handle_call({clear, ControlId}, _From, State) ->
 
 % Listbox constructors
 %------------------------------------------------------------------
-handle_call({new_listbox, PanelId, Items}, From, State) ->
+handle_call({new_listbox, PanelId, Width, Height, Items}, From, State) ->
     Id = next_id(),
-    % TODO: deal with options
-    WxListbox = load_control_and_run(PanelId, wxListBox, new, [Id, [{size, {-1,50}}, {choices, Items}]]), % TODO: size needs to be an option!
+    WxListbox = load_control_and_run(PanelId, wxListBox, new, [Id, [{size, {Width, Height}}, {choices, Items}]]), % TODO: allow passing of other options?
     set_control(to_record(From, Id, listbox, WxListbox)),
     {reply, {listbox, Id}, State};
 
@@ -229,10 +228,9 @@ handle_call({select_listbox_selection, Id, Text}, _From, State) ->
 
 % Listbox constructors
 %------------------------------------------------------------------
-handle_call({new_combobox, PanelId, Items}, From, State) ->
+handle_call({new_combobox, PanelId, Width, Height, Items}, From, State) ->
     Id = next_id(),
-    % TODO: deal with options
-    WxListbox = load_control_and_run(PanelId, wxComboBox, new, [Id, [{choices, Items}]]), % TODO: size needs to be an option!
+    WxListbox = load_control_and_run(PanelId, wxComboBox, new, [Id, [{size, {Width, Height}}, {choices, Items}]]), % TODO: allow passing of other options?
     set_control(to_record(From, Id, listbox, WxListbox)),
     {reply, {listbox, Id}, State};
 
@@ -281,7 +279,7 @@ new_panel(WxFrame, Options) -> {next_id(), wxPanel:new(WxFrame, Options)}.
 %       wxFrame:setStatusText(TheWxFrameObject, Text)
 load_control_and_run(ControlId, Mod, Fun) -> load_control_and_run(ControlId, Mod, Fun, []).
 load_control_and_run(ControlId, Mod, Fun, ExtraArgs) ->
-    WxControl = get_wx_control(ControlId), % TODO: what to do if control is not found?
+    WxControl = get_wx_control(ControlId),
     erlang:apply(Mod, Fun, [WxControl|ExtraArgs]).
 
 build_toolbar(WxFrame, From, Def, W, H) ->

@@ -64,8 +64,10 @@
                      | {label, string()}
                      | {listbox}
                      | {listbox, [string()]}
+                     | {listbox, integer(), integer(), [string()]}
                      | {combobox}
-                     | {combobox, [string()]}.
+                     | {combobox, [string()]}
+                     | {combobox, integer(), integer(), [string()]}.
 
 % Frame
 %------------------------------------------------------------------
@@ -185,15 +187,17 @@ build_controls(H = {panel, _PanelId}, Def) ->
     [build_control(H, Control) || Control <- Def].
 
 build_control({panel, _Id}, blank) -> blank;
-build_control(H = {panel, _Id}, {button, Text})           -> new_button(H, Text);
-build_control(H = {panel, _Id}, {label, Text})            -> new_label(H, Text);
-build_control(H = {panel, _Id}, {listbox})                -> new_listbox(H);
-build_control(H = {panel, _Id}, {listbox, Items})         -> new_listbox(H, Items);
-build_control(H = {panel, _Id}, {textbox})                -> new_textbox(H, "");
-build_control(H = {panel, _Id}, {combobox})               -> new_combobox(H);
-build_control(H = {panel, _Id}, {combobox, Items})        -> new_combobox(H, Items);
-build_control(H = {panel, _Id}, {textbox, Text})          -> new_textbox(H, Text);
-build_control(H = {panel, _Id}, {textbox, Text, Options}) -> new_textbox(H, Text, Options).
+build_control(H = {panel, _Id}, {button, Text})                     -> new_button(H, Text);
+build_control(H = {panel, _Id}, {label, Text})                      -> new_label(H, Text);
+build_control(H = {panel, _Id}, {listbox})                          -> new_listbox(H);
+build_control(H = {panel, _Id}, {listbox, Items})                   -> new_listbox(H, Items);
+build_control(H = {panel, _Id}, {listbox, Width, Height, Items})    -> new_listbox(H, Width, Height, Items);
+build_control(H = {panel, _Id}, {textbox})                          -> new_textbox(H, "");
+build_control(H = {panel, _Id}, {combobox})                         -> new_combobox(H);
+build_control(H = {panel, _Id}, {combobox, Items})                  -> new_combobox(H, Items);
+build_control(H = {panel, _Id}, {combobox, Width, Height, Items})   -> new_combobox(H, Width, Height, Items);
+build_control(H = {panel, _Id}, {textbox, Text})                    -> new_textbox(H, Text);
+build_control(H = {panel, _Id}, {textbox, Text, Options})           -> new_textbox(H, Text, Options).
 
 % Textbox constructors
 %------------------------------------------------------------------
@@ -235,10 +239,13 @@ clear({Type, Id}) when Type == textbox; Type == label ->
 % TODO: multi-select listboxes?
 
 -spec new_listbox(panel_handle()) -> listbox_handle().
-new_listbox(H = {panel, _PanelId}) -> new_listbox(H, []).
+new_listbox(H = {panel, _PanelId}) -> new_listbox(H, -1, -1, []).
 
 -spec new_listbox(panel_handle(), list()) -> listbox_handle().
-new_listbox({panel, PanelId}, Items) -> wx_object:call(?SERVER, {new_listbox, PanelId, Items}).
+new_listbox(H = {panel, _PanelId}, Items) -> new_listbox(H, -1, -1, Items).
+
+-spec new_listbox(panel_handle(), integer(), integer(), list()) -> listbox_handle().
+new_listbox({panel, PanelId}, Width, Height, Items) -> wx_object:call(?SERVER, {new_listbox, PanelId, Width, Height, Items}).
 
 % Listbox manipulation functions
 %------------------------------------------------------------------
@@ -251,9 +258,15 @@ set_selection({listbox, Id}, Text) -> wx_object:call(?SERVER, {select_listbox_se
 
 % Combobox constructors
 %------------------------------------------------------------------
-new_combobox(H = {panel, _PanelId}) -> new_combobox(H, []).
 
-new_combobox({panel, PanelId}, Items) -> wx_object:call(?SERVER, {new_combobox, PanelId, Items}).
+-spec new_combobox(panel_handle()) -> combobox_handle().
+new_combobox(H = {panel, _PanelId}) -> new_combobox(H, -1, -1, []).
+
+-spec new_combobox(panel_handle(), list()) -> combobox_handle().
+new_combobox(H = {panel, _PanelId}, Items) -> new_combobox(H, -1, -1, Items).
+
+-spec new_combobox(panel_handle(), integer(), integer(), list()) -> combobox_handle().
+new_combobox({panel, PanelId}, Width, Height, Items) -> wx_object:call(?SERVER, {new_combobox, PanelId, Width, Height, Items}).
 
 % Helpful utils to make WX easier to work with
 %------------------------------------------------------------------

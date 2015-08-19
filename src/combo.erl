@@ -13,7 +13,7 @@ init() ->
 
     Greetings = ["Hello", "Hi", "Bojour", "Guten Tag"],
     ControlDef = [
-        {label, "Salutation"}, {combobox, Greetings}
+        {label, "Salutation"}, {combobox, 50, 200, Greetings}
     ],
     Form = w:build_controls(Panel, ControlDef),
     [w:append_child(HBox, C) || C <- Form],
